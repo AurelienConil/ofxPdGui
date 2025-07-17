@@ -1,65 +1,140 @@
+/**
+ * @file ofApp.cpp
+ * @brief Implémentation de la classe principale ofApp - Cœur du rendu et de l'interaction
+ * 
+ * Ce fichier contient l'implémentation du moteur de rendu principal de ofxPdGui.
+ * Il coordonne le chargement des patches, la gestion des objets GUI et l'optimisation 
+ * des performances via le système FBO.
+ * 
+ * FLUX D'EXÉCUTION :
+ * 1. setup() : Charge le patch.pd et initialise le système FBO
+ * 2. update() : Met à jour les objets GUI à chaque frame
+ * 3. draw() : Effectue le rendu optimisé des objets
+ * 4. Événements souris/clavier : Propagés vers les objets concernés
+ * 
+ * INTÉGRATION ofxPd (PRÉPARÉE) :
+ * Les callbacks sont configurés mais utilisent actuellement des logs.
+ * Pour l'intégration complète, remplacer les ofLogNotice par :
+ * - ofxPd::sendFloat(symbol, value)
+ * - ofxPd::sendSymbol(symbol, message)
+ */
+
 #include "ofApp.h"
 
+/**
+ * @brief Initialisation principale de l'application
+ * 
+ * ÉTAPES D'INITIALISATION :
+ * 1. Configuration openFrameworks (framerate, background, titre)
+ * 2. Parsing du fichier patch.pd via PdPatchParser
+ * 3. Configuration des callbacks pour l'interface Pure Data
+ * 4. Initialisation du système FBO pour l'optimisation
+ * 
+ * Le parser analyse automatiquement tous les objets GUI du fichier .pd
+ * et les convertit en objets C++ utilisables (PdToggle, PdBang, etc.)
+ */
 void ofApp::setup() {
     ofSetFrameRate(60);
     ofBackground(50);
     ofSetWindowTitle("Pure Data Toggle Test");
     
-    // Créer une liste de toggles
-    //createToggles();
+    // === CHARGEMENT DU PATCH PURE DATA ===
+    // Le parser convertit automatiquement les objets .pd en objets C++
+    //createToggles(); // Méthode legacy pour les tests manuels
     
     PdPatchParser parser;
-    guiObjects = parser.parseFile("patch.pd");
+    guiObjects = parser.parseFile("patch.pd");  // Charge bin/data/patch.pd
     
-    
-    // Configurer les callbacks pour tous les objets
+    // === CONFIGURATION DE L'INTERFACE PURE DATA ===
+    // Les callbacks sont prêts pour l'intégration ofxPd
     setupCallbacks();
     
-    // Créer le FBO pour le rendu optimisé
+    // === INITIALISATION DU SYSTÈME FBO ===
+    // Prépare l'optimisation de rendu pour de meilleures performances
     setupFbo();
     
-    ofLogNotice("ofApp") << "Created " << guiObjects.size() << " toggles";
+    ofLogNotice("ofApp") << "Created " << guiObjects.size() << " GUI objects from patch.pd";
 }
 
+/**
+ * @brief Mise à jour à chaque frame
+ * 
+ * Met à jour tous les objets GUI chargés. Chaque objet peut avoir sa propre
+ * logique de mise à jour (animations, états temporaires, etc.)
+ * 
+ * OPTIMISATION : Les objets marquent automatiquement leurs zones de mise à jour
+ * pour le système FBO, évitant le rendu complet à chaque frame.
+ */
 void ofApp::update() {
-    // Mettre à jour tous les objets GUI
+    // Mettre à jour tous les objets GUI - propagation automatique des changements
     for (auto& obj : guiObjects) {
         obj->update();
     }
     
-    // Simulation : changer automatiquement quelques toggles
+    // === FONCTIONNALITÉ DE TEST ===
+    // Simulation automatique désactivée par défaut
     //simulateAutomaticChanges();
 }
 
+/**
+ * @brief Rendu principal de l'application
+ * 
+ * ARCHITECTURE DE RENDU :
+ * 1. Interface utilisateur : titre, compteurs, informations
+ * 2. Objets GUI : rendu via drawGuiObjects() (direct) ou drawGuiObjectsToFbo() (optimisé)
+ * 3. Informations de debug : contrôles et objets actifs
+ * 
+ * SYSTÈME FBO : Actuellement en rendu direct, le système FBO est préparé
+ * pour l'optimisation future des performances sur de gros patches.
+ */
 void ofApp::draw() {
-    // Dessiner le titre
+    // === INTERFACE UTILISATEUR ===
     ofSetColor(255);
-    ofDrawBitmapString("Pure Data Toggle Test - Click on toggles", 20, 30);
-    ofDrawBitmapString("Total toggles: " + ofToString(guiObjects.size()), 20, 50);
+    ofDrawBitmapString("Pure Data Patch Renderer - ofxPdGui", 20, 30);
+    ofDrawBitmapString("Total objects: " + ofToString(guiObjects.size()), 20, 50);
     ofDrawBitmapString("Active toggles: " + ofToString(countActiveToggles()), 20, 70);
     
-    // Dessiner tous les objets GUI
+    // === RENDU DES OBJETS GUI ===
+    // Méthode actuelle : rendu direct pour la simplicité
     drawGuiObjects();
     
-    // Afficher les informations de debug
+    // Méthode future : rendu optimisé via FBO
+    // drawGuiObjectsToFbo();
+    
+    // === INFORMATIONS DE DEBUG ===
     drawDebugInfo();
 }
 
+/**
+ * @brief Gestion des clics souris - Activation des objets GUI
+ * 
+ * Propage l'événement vers tous les objets GUI pour test de collision.
+ * Le premier objet qui gère l'événement arrête la propagation.
+ * 
+ * @param x, y Position du clic
+ * @param button Bouton souris (0=gauche, 1=droite, 2=molette)
+ */
 void ofApp::mousePressed(int x, int y, int button) {
     ofMouseEventArgs args;
     args.x = x;
     args.y = y;
     args.button = button;
     
-    // Propager l'événement à tous les objets
+    // Propagation vers les objets GUI - le premier qui répond arrête la chaîne
     for (auto& obj : guiObjects) {
         if (obj->onMousePressed(args)) {
-            ofLogNotice("ofApp") << "Toggle clicked: " << obj->getSendSymbol();
+            ofLogNotice("ofApp") << "Object activated: " << obj->getSendSymbol();
             break; // Arrêter après le premier objet qui gère l'événement
         }
     }
 }
 
+/**
+ * @brief Gestion du drag souris - Sliders et interactions continues
+ * 
+ * Propage l'événement vers tous les objets. Particulièrement important
+ * pour les sliders et autres contrôles continus.
+ */
 void ofApp::mouseDragged(int x, int y, int button) {
     ofMouseEventArgs args;
     args.x = x;
@@ -71,6 +146,11 @@ void ofApp::mouseDragged(int x, int y, int button) {
     }
 }
 
+/**
+ * @brief Gestion du relâchement souris - Fin des interactions
+ * 
+ * Finalise les interactions en cours (drag de sliders, etc.)
+ */
 void ofApp::mouseReleased(int x, int y, int button) {
     ofMouseEventArgs args;
     args.x = x;
@@ -82,6 +162,11 @@ void ofApp::mouseReleased(int x, int y, int button) {
     }
 }
 
+/**
+ * @brief Gestion du mouvement souris - Hover et feedback visuel
+ * 
+ * Permet aux objets de donner un feedback visuel lors du survol
+ */
 void ofApp::mouseMoved(int x, int y) {
     ofMouseEventArgs args;
     args.x = x;
@@ -92,25 +177,36 @@ void ofApp::mouseMoved(int x, int y) {
     }
 }
 
+/**
+ * @brief Gestion des raccourcis clavier
+ * 
+ * RACCOURCIS DISPONIBLES :
+ * - 'r' : Reset de tous les objets (valeur = 0)
+ * - 'a' : Activation de tous les objets (valeur = 1) 
+ * - 't' : Toggle aléatoire d'un objet
+ * 
+ * Ces raccourcis sont utiles pour les tests et la démo.
+ */
 void ofApp::keyPressed(int key) {
     if (key == 'r') {
-        // Reset tous les toggles
+        // Reset de tous les objets GUI
         for (auto& obj : guiObjects) {
             obj->setValue(0.0f);
         }
-        ofLogNotice("ofApp") << "All toggles reset";
+        ofLogNotice("ofApp") << "All objects reset";
     }
     else if (key == 'a') {
-        // Activer tous les toggles
+        // Activation de tous les objets GUI
         for (auto& obj : guiObjects) {
             obj->setValue(1.0f);
         }
-        ofLogNotice("ofApp") << "All toggles activated";
+        ofLogNotice("ofApp") << "All objects activated";
     }
     else if (key == 't') {
-        // Toggle aléatoire
+        // Toggle aléatoire d'un objet
         if (!guiObjects.empty()) {
             int randomIndex = ofRandom(guiObjects.size());
+            // Note: Cette conversion fonctionne pour les toggles, à adapter pour autres types
             PdToggle* toggle = static_cast<PdToggle*>(guiObjects[randomIndex].get());
             toggle->toggle();
             ofLogNotice("ofApp") << "Random toggle: " << toggle->getSendSymbol();
@@ -204,18 +300,33 @@ void ofApp::createToggles() {
     guiObjects.push_back(move(bang4));
 }
 
+/**
+ * @brief Configuration du système de callbacks vers Pure Data
+ * 
+ * INTERFACE ofxPd PRÊTE :
+ * Les callbacks sont configurés pour tous les objets GUI. Actuellement ils utilisent
+ * des logs pour les tests, mais sont prêts pour l'intégration ofxPd complète.
+ * 
+ * POUR L'INTÉGRATION COMPLÈTE, REMPLACER :
+ * - ofLogNotice par ofxPd::sendFloat(symbol, value)
+ * - ofLogNotice par ofxPd::sendSymbol(symbol, message)
+ * 
+ * Cette architecture permet une intégration transparente avec le moteur Pure Data.
+ */
 void ofApp::setupCallbacks() {
     for (auto& obj : guiObjects) {
-        // Callback pour l'envoi vers Pure Data
+        // === CALLBACK POUR VALEURS NUMÉRIQUES ===
+        // Sera appelé quand un objet GUI change de valeur
         obj->onSendToPd = [this](const string& symbol, float value) {
             ofLogNotice("PD Send") << symbol << " = " << value;
-            // Ici on appellerait ofxPd::sendFloat(symbol, value);
+            // À INTÉGRER : ofxPd::sendFloat(symbol, value);
         };
         
-        // Callback pour l'envoi de strings vers Pure Data
+        // === CALLBACK POUR MESSAGES TEXTE ===
+        // Sera appelé pour les messages texte (bang, etc.)
         obj->onSendToPdString = [this](const string& symbol, const string& message) {
             ofLogNotice("PD Send String") << symbol << " = " << message;
-            // Ici on appellerait ofxPd::sendSymbol(symbol, message);
+            // À INTÉGRER : ofxPd::sendSymbol(symbol, message);
         };
     }
 }
