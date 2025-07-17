@@ -34,6 +34,7 @@
 //
 
 #include "PatchParser.h"
+#include "Subpatch.h"
 
 using namespace std;
 
@@ -113,6 +114,9 @@ unique_ptr<PdGuiObject> PdPatchParser::parseLine(const string& line) {
                 return parseBang(tokens, ofVec2f(x, y));
             } else if(type == "cnv") {
                 return parseCanvas(tokens, ofVec2f(x, y));
+            } else if(type == "pd") {
+                // Subpatch reference : #X restore x y pd subpatch_name
+                return parseSubpatch(tokens, ofVec2f(x, y));
             }
         }
         // === BOÎTES DE NOMBRE : #X floatatom x y params... ===
@@ -124,6 +128,16 @@ unique_ptr<PdGuiObject> PdPatchParser::parseLine(const string& line) {
             float y = ofToFloat(tokens[3]);
             
             return parseNumberBox(tokens, ofVec2f(x, y));
+        }
+        // === SUBPATCHES : #X restore x y pd name ===
+        else if(line.find("#X restore") == 0) {
+            // Format : #X restore x y pd subpatch_name
+            if(tokens.size() < 5) return nullptr;
+            
+            float x = ofToFloat(tokens[2]);
+            float y = ofToFloat(tokens[3]);
+            
+            return parseSubpatch(tokens, ofVec2f(x, y));
         }
     } catch(exception& e) {
         ofLogError("PdPatchParser") << "Error parsing line: " << line << " - " << e.what();
@@ -384,6 +398,74 @@ ofColor PdPatchParser::parseHexColor(const string& hexStr) {
     } catch(exception& e) {
         ofLogError("PdPatchParser") << "Error parsing hex color: " << hexStr << " - " << e.what();
         return ofColor(128, 128, 128);
+    }
+}
+
+/**
+ * @brief Parse un subpatch Pure Data
+ * 
+ * FORMAT PURE DATA :
+ * #X restore x y pd subpatch_name
+ * 
+ * FONCTIONNEMENT :
+ * - Détecte la référence au subpatch dans le patch parent
+ * - Construit le chemin vers le fichier .pd du subpatch
+ * - Crée un objet PdSubpatch qui chargera et intégrera les objets enfants
+ * 
+ * @param tokens Tokens de la ligne parsée
+ * @param pos Position (x,y) du subpatch dans le patch parent
+ * @return PdSubpatch configuré ou nullptr si erreur
+ */
+unique_ptr<PdGuiObject> PdPatchParser::parseSubpatch(const vector<string>& tokens, ofVec2f pos) {
+    // Vérifier le format minimal : #X restore x y pd subpatch_name
+    if(tokens.size() < 5) {
+        ofLogWarning("PdPatchParser") << "Subpatch line too short: " << tokens.size() << " tokens";
+        return nullptr;
+    }
+    
+    // Extraire le nom du subpatch (après "pd")
+    string subpatchName;
+    if(tokens[3] == "pd" && tokens.size() > 4) {
+        subpatchName = tokens[4];
+    } else if(tokens[4] == "pd" && tokens.size() > 5) {
+        subpatchName = tokens[5];
+    } else {
+        ofLogWarning("PdPatchParser") << "Invalid subpatch format, missing 'pd' keyword";
+        return nullptr;
+    }
+    
+    // Construction du chemin vers le fichier subpatch
+    // Convention : les subpatches sont dans le même répertoire que le patch principal
+    string subpatchPath = subpatchName + ".pd";
+    
+    // Symboles send/receive par défaut basés sur le nom du subpatch
+    string sendSymbol = subpatchName + "_send";
+    string receiveSymbol = subpatchName + "_receive";
+    
+    // Taille par défaut pour le subpatch (peut être étendue plus tard)
+    ofVec2f defaultSize(100, 100);
+    
+    try {
+        // Créer l'objet PdSubpatch
+        auto subpatch = make_unique<PdSubpatch>(
+            pos,
+            defaultSize,
+            sendSymbol,
+            receiveSymbol,
+            subpatchPath,
+            pos.x, // Utiliser la position comme offset de base
+            pos.y
+        );
+        
+        ofLogNotice("PdPatchParser") << "Created subpatch: " << subpatchName 
+                                     << " at (" << pos.x << ", " << pos.y << ")";
+        
+        return subpatch;
+        
+    } catch(const exception& e) {
+        ofLogError("PdPatchParser") << "Failed to create subpatch " << subpatchName 
+                                    << ": " << e.what();
+        return nullptr;
     }
 }
 

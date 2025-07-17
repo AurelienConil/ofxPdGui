@@ -53,6 +53,7 @@
 #include "Slider.h"
 #include "NumberBox.h"
 #include "Canvas.h"
+#include "Subpatch.h"
 #include <vector>
 #include <string>
 #include <memory>
@@ -109,6 +110,9 @@ private:
     
     /// Parse une boîte de nombre : #X floatatom x y width min max ...
     std::unique_ptr<PdGuiObject> parseNumberBox(const std::vector<std::string>& tokens, ofVec2f pos);
+    
+    /// Parse un subpatch : #X restore x y pd name ou #N canvas ...
+    std::unique_ptr<PdGuiObject> parseSubpatch(const std::vector<std::string>& tokens, ofVec2f pos);
     
     // === UTILITAIRES ===
     /// Divise une chaîne selon un délimiteur

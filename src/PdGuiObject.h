@@ -56,6 +56,7 @@ enum class GuiType {
     TOGGLE,            ///< Toggle/checkbox (tgl dans .pd)
     BANG,              ///< Bang/bouton (bng dans .pd)  
     NUMBER_BOX,        ///< Boîte de nombre (floatatom dans .pd)
+    SUBPATCH,          ///< Sous-patch contenant d'autres objets GUI
     UNKNOWN            ///< Type non reconnu ou erreur
 };
 
@@ -160,6 +161,10 @@ public:
     /// Position de l'objet dans l'espace de rendu
     ofVec2f getPosition() const { return position; }
     
+    /// Définit la position de l'objet (pour transformation coordonnées subpatch)
+    void setPosition(ofVec2f newPosition) { position = newPosition; markForUpdate(); }
+    void setPosition(float x, float y) { setPosition(ofVec2f(x, y)); }
+    
     /// Taille de l'objet
     ofVec2f getSize() const { return size; }
     
@@ -174,11 +179,11 @@ public:
     
     /// État de visibilité de l'objet
     bool isVisible() const { return visible; }
-    void setVisible(bool v) { visible = v; if(v) markForUpdate(); }
+    virtual void setVisible(bool v) { visible = v; if(v) markForUpdate(); }
     
     /// État d'activation de l'objet (peut-il réagir aux événements)
     bool isEnabled() const { return enabled; }
-    void setEnabled(bool e) { enabled = e; markForUpdate(); }
+    virtual void setEnabled(bool e) { enabled = e; markForUpdate(); }
     
     // === HIT TESTING ===
     /// Test de collision point/objet pour les événements souris
