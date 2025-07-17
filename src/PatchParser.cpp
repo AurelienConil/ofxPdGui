@@ -1,3 +1,31 @@
+/**
+ * @file PatchParser.cpp
+ * @brief Implémentation du système de parsing des fichiers Pure Data
+ * 
+ * Ce fichier contient l'implémentation complète du parser qui convertit
+ * les fichiers .pd en objets C++ utilisables par le système de rendu.
+ * 
+ * ARCHITECTURE DU PARSING :
+ * 1. parseFile() : Lecture ligne par ligne du fichier .pd
+ * 2. parseLine() : Analyse syntaxique et dispatch selon le type
+ * 3. parseXXX() : Parsers spécialisés pour chaque type d'objet
+ * 
+ * SYNTAXE PURE DATA SUPPORTÉE :
+ * - #X obj x y type params... : Objets GUI standards
+ * - #X floatatom x y params... : Boîtes de nombre  
+ * - #N canvas x y width height : Sous-patches (à venir)
+ * 
+ * GESTION DES ERREURS :
+ * - Try/catch pour chaque ligne de parsing
+ * - Logs d'erreur détaillés pour le debugging
+ * - Poursuite du parsing même en cas d'erreur sur une ligne
+ * 
+ * OPTIMISATIONS :
+ * - Utilisation d'ofBuffer pour la lecture efficace
+ * - Smart pointers pour la gestion mémoire
+ * - Filtrage des objets sans send/receive (objets purement visuels)
+ */
+
 //
 //  PatchParser.cpp
 //  pd-gui
@@ -9,10 +37,23 @@
 
 using namespace std;
 
+/**
+ * @brief Parse un fichier .pd complet et retourne tous les objets GUI
+ * 
+ * PROCESSUS :
+ * 1. Chargement du fichier via ofBuffer (gestion UTF-8 et encodages)
+ * 2. Parsing ligne par ligne avec gestion d'erreurs
+ * 3. Filtrage automatique des objets non-GUI
+ * 4. Création des objets C++ correspondants
+ * 
+ * @param filename Nom du fichier .pd (relatif à bin/data/)
+ * @return Collection d'objets GUI prêts pour le rendu
+ */
 vector<unique_ptr<PdGuiObject>> PdPatchParser::parseFile(const string& filename) {
     vector<unique_ptr<PdGuiObject>> objects;
     
-    // Utiliser ofBuffer pour lire le fichier
+    // === CHARGEMENT DU FICHIER ===
+    // ofBuffer gère automatiquement les différents encodages et sauts de ligne
     ofBuffer buffer = ofBufferFromFile(filename);
     
     if(buffer.size() == 0) {
@@ -20,7 +61,8 @@ vector<unique_ptr<PdGuiObject>> PdPatchParser::parseFile(const string& filename)
         return objects;
     }
     
-    // Parser ligne par ligne
+    // === PARSING LIGNE PAR LIGNE ===
+    // Chaque ligne du fichier .pd représente un élément du patch
     for(auto line : buffer.getLines()) {
         auto obj = parseLine(line);
         if(obj) {
@@ -28,24 +70,39 @@ vector<unique_ptr<PdGuiObject>> PdPatchParser::parseFile(const string& filename)
         }
     }
     
-    ofLogNotice("PdPatchParser") << "Parsed " << objects.size() << " GUI objects from " << filename;
+    ofLogNotice("PdPatchParser") << "Successfully parsed " << objects.size() << " GUI objects from " << filename;
     return objects;
 }
 
+/**
+ * @brief Analyse une ligne du fichier .pd et crée l'objet GUI correspondant
+ * 
+ * FORMATS SUPPORTÉS :
+ * - #X obj x y type params... : Objets GUI (hsl, vsl, tgl, bng, cnv)
+ * - #X floatatom x y params... : Boîtes de nombre
+ * - Autres lignes : Ignorées (connexions, commentaires, etc.)
+ * 
+ * DISPATCH :
+ * Selon le type détecté, appelle le parser spécialisé approprié.
+ * 
+ * @param line Ligne à analyser du fichier .pd
+ * @return Objet GUI créé ou nullptr si la ligne n'est pas un objet GUI
+ */
 unique_ptr<PdGuiObject> PdPatchParser::parseLine(const string& line) {
     vector<string> tokens = splitString(line, ' ');
     if(tokens.size() < 3) return nullptr;
     
     try {
-        // Gérer les différents types de lignes Pure Data
+        // === OBJETS GUI STANDARDS : #X obj x y type params... ===
         if(line.find("#X obj") == 0) {
-            // Format: #X obj x y type params...
+            // Format général : #X obj x y type params...
             if(tokens.size() < 5) return nullptr;
             
             float x = ofToFloat(tokens[2]);
             float y = ofToFloat(tokens[3]);
             string type = tokens[4];
             
+            // Dispatch selon le type d'objet
             if(type == "hsl") {
                 return parseHorizontalSlider(tokens, ofVec2f(x, y));
             } else if(type == "vsl") {
@@ -54,12 +111,13 @@ unique_ptr<PdGuiObject> PdPatchParser::parseLine(const string& line) {
                 return parseToggle(tokens, ofVec2f(x, y));
             } else if(type == "bng") {
                 return parseBang(tokens, ofVec2f(x, y));
-            }  else if(type == "cnv") {  // NOUVEAU: Canvas
+            } else if(type == "cnv") {
                 return parseCanvas(tokens, ofVec2f(x, y));
             }
         }
+        // === BOÎTES DE NOMBRE : #X floatatom x y params... ===
         else if(line.find("#X floatatom") == 0) {
-            // Format: #X floatatom x y width min max label_pos label font_size send receive label
+            // Format : #X floatatom x y width min max label_pos label font_size send receive label
             if(tokens.size() < 4) return nullptr;
             
             float x = ofToFloat(tokens[2]);
@@ -68,7 +126,7 @@ unique_ptr<PdGuiObject> PdPatchParser::parseLine(const string& line) {
             return parseNumberBox(tokens, ofVec2f(x, y));
         }
     } catch(exception& e) {
-        ofLogError("PdPatchParser") << "Error parsing line: " << line;
+        ofLogError("PdPatchParser") << "Error parsing line: " << line << " - " << e.what();
     }
     
     return nullptr;
@@ -76,26 +134,45 @@ unique_ptr<PdGuiObject> PdPatchParser::parseLine(const string& line) {
 
 
 
+/**
+ * @brief Parse un slider horizontal Pure Data (hsl)
+ * 
+ * FORMAT PURE DATA :
+ * #X obj x y hsl width height min max lin_log iem_init_i send receive label x_off y_off font font_size bg_color fg_color label_color val;
+ * 
+ * PARAMÈTRES IMPORTANTS :
+ * - width/height : Dimensions du slider  
+ * - min/max : Plage de valeurs
+ * - send/receive : Symboles de communication
+ * - val : Valeur initiale (souvent en fin de ligne)
+ * 
+ * @param tokens Tokens de la ligne parsée
+ * @param pos Position (x,y) de l'objet
+ * @return Slider horizontal ou nullptr si erreur
+ */
 unique_ptr<PdGuiObject> PdPatchParser::parseHorizontalSlider(const vector<string>& tokens, ofVec2f pos) {
-    // Format: #X obj x y hsl width height min max lin_log iem_init_i send receive label x_off y_off font font_size bg_color fg_color label_color val;
+    // Format complet attendu avec au moins 12 paramètres de base
     if(tokens.size() < 12) return nullptr;
     
     string sendSym = tokens[10];
     string receiveSym = tokens[11];
     
-    // Ignorer les objets sans send/receive
+    // === FILTRAGE DES OBJETS SANS COMMUNICATION ===
+    // Ignorer les objets purement décoratifs (sans send/receive)
     if(sendSym == "empty" && receiveSym == "empty") return nullptr;
     
+    // === EXTRACTION DES PARAMÈTRES ===
     ofVec2f size = ofVec2f(ofToFloat(tokens[5]), ofToFloat(tokens[6]));
     float minVal = ofToFloat(tokens[7]);
     float maxVal = ofToFloat(tokens[8]);
     
-    // Valeur initiale (si disponible dans les tokens)
-    float initialValue = minVal; // Valeur par défaut
+    // === VALEUR INITIALE ===
+    // Pure Data place souvent la valeur initiale en fin de ligne
+    float initialValue = minVal; // Valeur par défaut au minimum
     if(tokens.size() > 20) {
-        // La valeur initiale est souvent dans le dernier token pour les sliders PD
+        // Récupérer la valeur du dernier token (convention Pure Data)
         initialValue = ofToFloat(tokens[tokens.size() - 1]);
-        // S'assurer que la valeur est dans la plage
+        // S'assurer que la valeur est dans la plage autorisée
         initialValue = ofClamp(initialValue, minVal, maxVal);
     }
     
