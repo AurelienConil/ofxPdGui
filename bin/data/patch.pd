@@ -1,0 +1,15 @@
+#N canvas 412 149 450 300 12;
+#X obj 84 42 bng 40 250 50 0 b1_out b1_in empty 0 -10 0 12 #fcfcfc #000000 #000000;
+#X obj 153 43 bng 19 250 50 0 b2_out b2_in empty 0 -10 0 12 #fcfcfc #000000 #000000;
+#X obj 238 44 tgl 40 0 t1_out t1_in empty 0 -10 0 12 #fcfcfc #000000 #000000 0 1;
+#X obj 316 45 tgl 19 0 t2_out t2_in empty 0 -10 0 12 #fcfcfc #000000 #000000 0 1;
+#X obj 364 170 bng 40 250 50 0 bbleu_out bbleu_in empty 0 -10 0 12 #00faff #000000 #000000;
+#X obj 41 103 vsl 19 162 0 127 0 0 empty empty empty 0 -9 0 12 #fcfcfc #000000 #000000 0 1;
+#X obj 91 238 hsl 162 19 0 127 0 0 empty empty empty -2 -10 0 12 #fcfcfc #000000 #000000 0 1;
+#X floatatom 91 112 5 0 0 0 - - - 0;
+#X obj 167 111 cnv 19 126 76 empty empty TOTO 20 12 0 12 #faff00 #9c00ff 0;
+#N canvas 440 478 450 300 subpatch 1;
+#X obj 109 105 bng 19 250 50 0 empty empty empty 0 -10 0 12 #fcfcfc #000000 #000000;
+#X obj 135 106 bng 19 250 50 0 empty empty empty 0 -10 0 12 #fcfcfc #000000 #000000;
+#X coords 0 -1 1 1 85 60 1 100 100;
+#X restore 297 231 pd subpatch;
