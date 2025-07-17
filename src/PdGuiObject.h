@@ -179,11 +179,11 @@ public:
     
     /// État de visibilité de l'objet
     bool isVisible() const { return visible; }
-    void setVisible(bool v) { visible = v; if(v) markForUpdate(); }
+    virtual void setVisible(bool v) { visible = v; if(v) markForUpdate(); }
     
     /// État d'activation de l'objet (peut-il réagir aux événements)
     bool isEnabled() const { return enabled; }
-    void setEnabled(bool e) { enabled = e; markForUpdate(); }
+    virtual void setEnabled(bool e) { enabled = e; markForUpdate(); }
     
     // === HIT TESTING ===
     /// Test de collision point/objet pour les événements souris

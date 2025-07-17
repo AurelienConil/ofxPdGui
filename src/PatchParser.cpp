@@ -423,8 +423,16 @@ unique_ptr<PdGuiObject> PdPatchParser::parseSubpatch(const vector<string>& token
         return nullptr;
     }
     
-    // Extraire le nom du subpatch
-    string subpatchName = tokens[4];
+    // Extraire le nom du subpatch (après "pd")
+    string subpatchName;
+    if(tokens[3] == "pd" && tokens.size() > 4) {
+        subpatchName = tokens[4];
+    } else if(tokens[4] == "pd" && tokens.size() > 5) {
+        subpatchName = tokens[5];
+    } else {
+        ofLogWarning("PdPatchParser") << "Invalid subpatch format, missing 'pd' keyword";
+        return nullptr;
+    }
     
     // Construction du chemin vers le fichier subpatch
     // Convention : les subpatches sont dans le même répertoire que le patch principal
