@@ -117,7 +117,7 @@ bool PdSubpatch::onMouseMoved(ofMouseEventArgs& args) {
 
 void PdSubpatch::setValue(float value) {
     // Mettre à jour la valeur de base
-    PdGuiObject::setValue(value);
+    setValue(value);
     
     // Optionnel : propager la valeur aux objets enfants
     // (dépend du comportement souhaité)
@@ -125,7 +125,7 @@ void PdSubpatch::setValue(float value) {
 
 void PdSubpatch::setVisible(bool visible) {
     // Mettre à jour la visibilité de base
-    PdGuiObject::setVisible(visible);
+    setVisible(visible);
     
     // Propager aux objets enfants
     propagateToChildren([visible](PdGuiObject* child) {
@@ -135,7 +135,7 @@ void PdSubpatch::setVisible(bool visible) {
 
 void PdSubpatch::setEnabled(bool enabled) {
     // Mettre à jour l'état enabled de base
-    PdGuiObject::setEnabled(enabled);
+    setEnabled(enabled);
     
     // Propager aux objets enfants
     propagateToChildren([enabled](PdGuiObject* child) {

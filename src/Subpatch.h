@@ -38,6 +38,7 @@
 #pragma once
 
 #include "ofMain.h"
+#include "PatchParser.h"
 #include "PdGuiObject.h"
 #include <vector>
 #include <memory>
@@ -68,8 +69,6 @@ struct GopProperties;
  * - Position dans le patch parent définie par les coordonnées du #X restore
  */
 
-#include "PdGuiObject.h"
-#include "ofMain.h"
 
 class PdSubpatch : public PdGuiObject {
 public:
@@ -83,7 +82,8 @@ public:
     /// @param inlineContent Contenu inline du subpatch (pour subpatches intégrés)
     /// @param canvasSize Taille du canvas du subpatch pour la conversion de coordonnées
     PdSubpatch(ofVec2f position,
-               const std::string& sendSymbol, const std::string& receiveSymbol,
+               const std::string& sendSymbol,
+               const std::string& receiveSymbol,
                const std::string& subpatchPath,
                const GopProperties& gopProps,
                const std::vector<std::string>& inlineContent = {},
@@ -117,8 +117,8 @@ public:
     virtual void setValue(float value) override;
     
     /// Propagation des états aux objets enfants
-    virtual void setVisible(bool visible);
-    virtual void setEnabled(bool enabled);
+    virtual void setVisible(bool visible) override;
+    virtual void setEnabled(bool enabled) override;
     
     // === GESTION DES OBJETS ENFANTS ===
     /// Accès aux objets enfants (lecture seule)
