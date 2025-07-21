@@ -175,6 +175,13 @@ void PdSubpatch::clearChildren() {
 
 bool PdSubpatch::loadSubpatch() {
     try {
+        // Si des objets enfants ont déjà été ajoutés directement, ne pas recharger
+        if (!children.empty()) {
+            ofLogNotice("PdSubpatch") << "Subpatch already has " << children.size() 
+                                      << " children loaded directly, skipping file/inline loading";
+            return true;
+        }
+        
         // Vérifier si on a du contenu inline
         if (!inlineContent.empty()) {
             // Traiter le contenu inline
