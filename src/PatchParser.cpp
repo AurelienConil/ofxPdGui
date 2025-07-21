@@ -43,7 +43,7 @@ using namespace std;
  * 
  * PROCESSUS :
  * 1. Chargement du fichier via ofBuffer (gestion UTF-8 et encodages)
- * 2. Parsing ligne par ligne avec gestion d'erreurs
+ * 2. Parsing ligne par ligne avec gestion des blocs subpatch GOP
  * 3. Filtrage automatique des objets non-GUI
  * 4. Création des objets C++ correspondants
  * 
@@ -62,12 +62,25 @@ vector<unique_ptr<PdGuiObject>> PdPatchParser::parseFile(const string& filename)
         return objects;
     }
     
-    // === PARSING LIGNE PAR LIGNE ===
-    // Chaque ligne du fichier .pd représente un élément du patch
-    for(auto line : buffer.getLines()) {
-        auto obj = parseLine(line);
-        if(obj) {
-            objects.push_back(move(obj));
+    // === PARSING LIGNE PAR LIGNE AVEC SUPPORT DES BLOCS SUBPATCH ===
+    auto lines = buffer.getLines();
+    for(int i = 0; i < lines.size(); i++) {
+        string line = lines[i];
+        
+        // Vérifier si c'est le début d'un bloc subpatch GOP
+        if(line.find("#N canvas") == 0) {
+            // Parser le bloc complet de subpatch (multi-lignes)
+            auto subpatch = parseGopSubpatch(lines, i);
+            if(subpatch) {
+                objects.push_back(move(subpatch));
+            }
+            // i est maintenant mis à jour par parseGopSubpatch pour pointer après le #X restore
+        } else {
+            // Parser les lignes simples (objets GUI individuels)
+            auto obj = parseLine(line);
+            if(obj) {
+                objects.push_back(move(obj));
+            }
         }
     }
     
@@ -467,6 +480,171 @@ unique_ptr<PdGuiObject> PdPatchParser::parseSubpatch(const vector<string>& token
                                     << ": " << e.what();
         return nullptr;
     }
+}
+
+/**
+ * @brief Parse un bloc complet de subpatch GOP (de #N canvas à #X restore)
+ * 
+ * PROCESSUS :
+ * 1. Trouve la ligne #X coords avec les propriétés GOP
+ * 2. Trouve la ligne #X restore avec la position et le nom
+ * 3. Valide que le subpatch est en mode GOP (GOP_flag = 1)
+ * 4. Crée le subpatch avec les bonnes propriétés GOP
+ * 
+ * @param lines Toutes les lignes du fichier
+ * @param currentLineIndex Index de la ligne #N canvas (sera mis à jour)
+ * @return PdSubpatch GOP ou nullptr si pas GOP ou erreur
+ */
+unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& lines, int& currentLineIndex) {
+    if(currentLineIndex >= lines.size()) return nullptr;
+    
+    // Variables pour stocker les informations trouvées
+    GopProperties gopProps;
+    SubpatchRestoreInfo restoreInfo;
+    restoreInfo.isValid = false;
+    
+    // Parcourir le bloc jusqu'à trouver #X restore
+    int startIndex = currentLineIndex;
+    currentLineIndex++; // Passer la ligne #N canvas
+    
+    while(currentLineIndex < lines.size()) {
+        string line = lines[currentLineIndex];
+        
+        // Chercher la ligne #X coords pour les propriétés GOP
+        if(line.find("#X coords") == 0) {
+            gopProps = parseGopProperties(line);
+        }
+        
+        // Chercher la ligne #X restore pour la fin du bloc
+        if(line.find("#X restore") == 0) {
+            restoreInfo = parseRestoreLine(line);
+            break;
+        }
+        
+        currentLineIndex++;
+    }
+    
+    // Vérifier que c'est bien un subpatch GOP valide
+    if(!restoreInfo.isValid) {
+        ofLogWarning("PdPatchParser") << "Subpatch block without valid #X restore line";
+        return nullptr;
+    }
+    
+    if(!gopProps.isGop) {
+        ofLogNotice("PdPatchParser") << "Subpatch " << restoreInfo.subpatchName 
+                                     << " is not GOP-enabled, skipping";
+        return nullptr;
+    }
+    
+    // Créer le nom du fichier subpatch
+    string subpatchPath = restoreInfo.subpatchName + ".pd";
+    
+    // Symboles send/receive par défaut
+    string sendSymbol = restoreInfo.subpatchName + "_send";
+    string receiveSymbol = restoreInfo.subpatchName + "_receive";
+    
+    try {
+        // Créer le subpatch GOP
+        auto subpatch = make_unique<PdSubpatch>(
+            restoreInfo.position,
+            sendSymbol,
+            receiveSymbol,
+            subpatchPath,
+            gopProps
+        );
+        
+        ofLogNotice("PdPatchParser") << "Created GOP subpatch: " << restoreInfo.subpatchName 
+                                     << " at (" << restoreInfo.position.x << ", " << restoreInfo.position.y << ")"
+                                     << " with GOP properties (minX:" << gopProps.minX << ", minY:" << gopProps.minY
+                                     << ", maxX:" << gopProps.maxX << ", maxY:" << gopProps.maxY
+                                     << ", size:" << gopProps.widthInPixels << "x" << gopProps.heightInPixels << ")";
+        
+        return subpatch;
+        
+    } catch(const exception& e) {
+        ofLogError("PdPatchParser") << "Failed to create GOP subpatch " << restoreInfo.subpatchName 
+                                    << ": " << e.what();
+        return nullptr;
+    }
+}
+
+/**
+ * @brief Extrait les propriétés GOP depuis une ligne #X coords
+ * 
+ * FORMAT : #X coords minX minY maxX maxY widthInPixels heightInPixels GOP_flag xPos yPos
+ * EXEMPLE : #X coords 0 -1 1 1 85 60 1 100 100
+ */
+GopProperties PdPatchParser::parseGopProperties(const string& line) {
+    vector<string> tokens = splitString(line, ' ');
+    
+    // Vérifier le format minimal : #X coords minX minY maxX maxY width height gop_flag
+    if(tokens.size() < 9) {
+        ofLogWarning("PdPatchParser") << "Invalid #X coords line format: " << line;
+        return GopProperties(); // Propriétés par défaut (non-GOP)
+    }
+    
+    try {
+        float minX = ofToFloat(tokens[2]);
+        float minY = ofToFloat(tokens[3]);
+        float maxX = ofToFloat(tokens[4]);
+        float maxY = ofToFloat(tokens[5]);
+        float width = ofToFloat(tokens[6]);
+        float height = ofToFloat(tokens[7]);
+        bool isGop = ofToInt(tokens[8]) == 1; // GOP_flag = 1 pour GOP activé
+        
+        ofLogNotice("PdPatchParser") << "Parsed GOP properties: minX=" << minX << ", minY=" << minY
+                                     << ", maxX=" << maxX << ", maxY=" << maxY
+                                     << ", size=" << width << "x" << height
+                                     << ", GOP=" << (isGop ? "enabled" : "disabled");
+        
+        return GopProperties(minX, minY, maxX, maxY, width, height, isGop);
+        
+    } catch(const exception& e) {
+        ofLogError("PdPatchParser") << "Error parsing GOP properties: " << line << " - " << e.what();
+        return GopProperties();
+    }
+}
+
+/**
+ * @brief Parse une ligne #X restore et retourne les informations de position/nom
+ * 
+ * FORMAT : #X restore x y pd subpatch_name
+ */
+PdPatchParser::SubpatchRestoreInfo PdPatchParser::parseRestoreLine(const string& line) {
+    SubpatchRestoreInfo info;
+    vector<string> tokens = splitString(line, ' ');
+    
+    // Format : #X restore x y pd subpatch_name
+    if(tokens.size() < 5) {
+        ofLogWarning("PdPatchParser") << "Invalid #X restore line format: " << line;
+        return info;
+    }
+    
+    if(tokens[4] != "pd") {
+        ofLogWarning("PdPatchParser") << "Expected 'pd' keyword in restore line: " << line;
+        return info;
+    }
+    
+    try {
+        info.position.x = ofToFloat(tokens[2]);
+        info.position.y = ofToFloat(tokens[3]); 
+        string subpatchNameRaw = tokens[5]; // After "pd" keyword
+        
+        // Remove semicolon if present
+        if(subpatchNameRaw.back() == ';') {
+            subpatchNameRaw.pop_back();
+        }
+        info.subpatchName = subpatchNameRaw;
+        info.isValid = true;
+        
+        ofLogNotice("PdPatchParser") << "Parsed restore info: " << info.subpatchName
+                                     << " at (" << info.position.x << ", " << info.position.y << ")";
+        
+    } catch(const exception& e) {
+        ofLogError("PdPatchParser") << "Error parsing restore line: " << line << " - " << e.what();
+    }
+    
+    return info;
 }
 
 vector<string> PdPatchParser::splitString(const string& str, char delimiter) {
