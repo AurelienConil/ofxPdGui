@@ -459,15 +459,16 @@ unique_ptr<PdGuiObject> PdPatchParser::parseSubpatch(const vector<string>& token
     ofVec2f defaultSize(100, 100);
     
     try {
-        // Créer l'objet PdSubpatch
+        // Créer l'objet PdSubpatch avec propriétés GOP par défaut (non-GOP)
+        GopProperties defaultGopProps; // isGop = false par défaut
         auto subpatch = make_unique<PdSubpatch>(
             pos,
-            defaultSize,
             sendSymbol,
             receiveSymbol,
             subpatchPath,
-            pos.x, // Utiliser la position comme offset de base
-            pos.y
+            defaultGopProps,
+            vector<string>(), // Pas de contenu inline
+            defaultSize
         );
         
         ofLogNotice("PdPatchParser") << "Created subpatch: " << subpatchName 
