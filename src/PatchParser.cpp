@@ -65,24 +65,22 @@ vector<unique_ptr<PdGuiObject>> PdPatchParser::parseFile(const string& filename)
     // === PARSING LIGNE PAR LIGNE ===
     auto lines = buffer.getLines();
     int currentLineIndex = 0;
+    bool firstCanvasSkipped = false;
     
     while(currentLineIndex < lines.size()) {
         string line = lines[currentLineIndex];
         
-        // Vérifier si c'est le début d'un bloc subpatch GOP
-        if(line.find("#N canvas") == 0) {
-            // Parser le bloc complet de subpatch (multi-lignes)
-            auto subpatch = parseGopSubpatch(lines, currentLineIndex);
-            if(subpatch) {
-                objects.push_back(move(subpatch));
-            }
-            // currentLineIndex est maintenant mis à jour par parseGopSubpatch pour pointer après le #X restore
+        // Skip the first #N canvas line (main patch canvas declaration)
+        if(line.find("#N canvas") == 0 && !firstCanvasSkipped) {
+            firstCanvasSkipped = true;
+            ofLogNotice("PdPatchParser") << "Skipping main canvas declaration: " << line;
         } else {
-            // Parser les lignes simples (objets GUI individuels)
-            auto obj = parseLine(line);
+            // Use the enhanced parseLine that can handle both regular objects and subpatches
+            auto obj = parseLine(lines, currentLineIndex);
             if(obj) {
                 objects.push_back(move(obj));
             }
+            // Note: currentLineIndex may have been advanced by parseLine if a subpatch was processed
         }
         
         currentLineIndex++;
@@ -161,6 +159,31 @@ unique_ptr<PdGuiObject> PdPatchParser::parseLine(const string& line) {
     }
     
     return nullptr;
+}
+
+/**
+ * @brief Parse une ligne avec support des subpatches - détecte #N canvas et appelle parseGopSubpatch
+ * 
+ * Cette méthode étend parseLine pour gérer les subpatches en détectant les blocs #N canvas
+ * et en appelant parseGopSubpatch avec le vecteur global de lignes et l'index.
+ * 
+ * @param lines Vecteur global de toutes les lignes
+ * @param currentLineIndex Index de la ligne courante (sera mis à jour)
+ * @return Objet GUI créé ou nullptr si la ligne n'est pas un objet GUI
+ */
+unique_ptr<PdGuiObject> PdPatchParser::parseLine(const vector<string>& lines, int& currentLineIndex) {
+    if(currentLineIndex >= lines.size()) return nullptr;
+    
+    string line = lines[currentLineIndex];
+    
+    // Détecter les subpatches et les traiter
+    if(line.find("#N canvas") == 0) {
+        // Appel direct à parseGopSubpatch avec les lignes globales et l'index
+        return parseGopSubpatch(lines, currentLineIndex);
+    } else {
+        // Pour les lignes simples, utiliser la méthode parseLine standard
+        return parseLine(line);
+    }
 }
 
 

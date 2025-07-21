@@ -112,6 +112,9 @@ public:
     /// Parse une ligne individuelle du fichier .pd (méthode publique pour usage par PdSubpatch)
     std::unique_ptr<PdGuiObject> parseLine(const std::string& line);
     
+    /// Parse une ligne avec support des subpatches (utilise le vecteur global de lignes)
+    std::unique_ptr<PdGuiObject> parseLine(const std::vector<std::string>& lines, int& currentLineIndex);
+    
 private:
     // === PARSERS SPÉCIALISÉS ===
     
