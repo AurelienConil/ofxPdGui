@@ -502,7 +502,6 @@ unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& li
     GopProperties gopProps;
     SubpatchRestoreInfo restoreInfo;
     restoreInfo.isValid = false;
-    vector<string> subpatchContent;
     ofVec2f canvasSize(450, 300); // Taille par défaut
     
     // Extraire les propriétés du canvas depuis la ligne #N canvas
@@ -517,6 +516,9 @@ unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& li
     int startIndex = currentLineIndex;
     currentLineIndex++; // Passer la ligne #N canvas
     
+    // Parse GUI objects directly and store them for later addition to subpatch
+    vector<unique_ptr<PdGuiObject>> parsedObjects;
+    
     while(currentLineIndex < lines.size()) {
         string line = lines[currentLineIndex];
         
@@ -529,9 +531,12 @@ unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& li
             restoreInfo = parseRestoreLine(line);
             break;
         }
-        // Collecter les autres lignes comme contenu du subpatch
+        // Parse les autres lignes comme objets GUI directement
         else {
-            subpatchContent.push_back(line);
+            auto obj = parseLine(line);
+            if(obj) {
+                parsedObjects.push_back(move(obj));
+            }
         }
         
         currentLineIndex++;
@@ -549,7 +554,7 @@ unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& li
         return nullptr;
     }
     
-    // Créer le nom du fichier subpatch (pour référence, même si on utilise le contenu inline)
+    // Créer le nom du fichier subpatch (pour référence)
     string subpatchPath = restoreInfo.subpatchName;
     
     // Symboles send/receive par défaut
@@ -557,16 +562,23 @@ unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& li
     string receiveSymbol = restoreInfo.subpatchName + "_receive";
     
     try {
-        // Créer le subpatch GOP avec le contenu inline
+        // Créer le subpatch GOP sans contenu inline (sera ajouté après)
         auto subpatch = make_unique<PdSubpatch>(
             restoreInfo.position,
             sendSymbol,
             receiveSymbol,
             subpatchPath,
             gopProps,
-            subpatchContent,
+            vector<string>(), // Empty inline content since we parsed directly
             canvasSize
         );
+        
+        // Ajouter les objets parsés directement au subpatch
+        for(auto& obj : parsedObjects) {
+            if(obj) {
+                subpatch->addChild(move(obj));
+            }
+        }
         
         ofLogNotice("PdPatchParser") << "Created inline GOP subpatch: " << restoreInfo.subpatchName 
                                      << " at (" << restoreInfo.position.x << ", " << restoreInfo.position.y << ")"
@@ -574,16 +586,7 @@ unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& li
                                      << " and GOP properties (minX:" << gopProps.minX << ", minY:" << gopProps.minY
                                      << ", maxX:" << gopProps.maxX << ", maxY:" << gopProps.maxY
                                      << ", size:" << gopProps.widthInPixels << "x" << gopProps.heightInPixels << ")"
-                                     << " containing " << subpatchContent.size() << " content lines";
-        
-        return subpatch;
-        
-    } catch(const exception& e) {
-        ofLogError("PdPatchParser") << "Failed to create GOP subpatch " << restoreInfo.subpatchName 
-                                    << ": " << e.what();
-        return nullptr;
-    }
-}
+                                     << " containing " << parsedObjects.size() << " parsed objects";
         
         return subpatch;
         
