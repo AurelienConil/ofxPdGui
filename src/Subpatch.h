@@ -62,6 +62,10 @@
  * - Gestion du cycle de vie des objets enfants
  * - Propagation des états et propriétés
  */
+
+#include "PdGuiObject.h"
+#include "ofMain.h"
+
 class PdSubpatch : public PdGuiObject {
 public:
     // === CONSTRUCTION ET DESTRUCTION ===

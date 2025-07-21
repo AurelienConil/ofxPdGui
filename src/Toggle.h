@@ -51,6 +51,9 @@
  * - Croix noire en mode activé
  * - Couleur de survol pour le feedback
  */
+#pragma once
+#include "PdGuiObject.h"
+#include "ofMain.h"
 class PdToggle : public PdGuiObject {
 public:
     // === CONSTRUCTION ===

@@ -60,6 +60,10 @@
  * - Même style que toggle (carré + bordure noire)
  * - Cercle rouge centré pendant l'activation
  */
+#pragma once
+#include "PdGuiObject.h"
+#include "ofMain.h"
+
 class PdBang : public PdGuiObject {
 public:
     // === PALETTE DE COULEURS BANG ===

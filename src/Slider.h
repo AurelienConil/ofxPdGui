@@ -63,6 +63,9 @@
  * - Knob : Carré mobile, couleur différenciée
  * - Texte : Affichage optionnel de la valeur numérique
  */
+#pragma once
+#include "PdGuiObject.h"
+#include "ofMain.h"
 class PdSlider : public PdGuiObject {
 public:
     // === CONSTRUCTION ===

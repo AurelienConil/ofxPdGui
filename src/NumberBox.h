@@ -61,6 +61,10 @@
  * - Configurable via setValueRange()
  * - Contrainte automatique dans la plage lors du drag
  */
+
+#include "PdGuiObject.h"
+#include "ofMain.h"
+
 class PdNumberBox : public PdGuiObject {
 public:
     // === CONSTRUCTION ===

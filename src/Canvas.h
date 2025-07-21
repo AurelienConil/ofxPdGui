@@ -57,7 +57,12 @@
  * - Labels de sections dans un patch
  * - Arrière-plans colorés pour grouper des contrôles
  * - Informations textuelles statiques
+ *
  */
+
+#include "PdGuiObject.h"
+#include "ofMain.h"
+
 class PdCanvas : public PdGuiObject {
 public:
     // === CONSTRUCTION ===
