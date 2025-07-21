@@ -109,10 +109,11 @@ public:
     /// @return Collection d'objets GUI prêts pour le rendu
     std::vector<std::unique_ptr<PdGuiObject>> parseFile(const std::string& filename);
     
+    /// Parse une ligne individuelle du fichier .pd (méthode publique pour usage par PdSubpatch)
+    std::unique_ptr<PdGuiObject> parseLine(const std::string& line);
+    
 private:
     // === PARSERS SPÉCIALISÉS ===
-    /// Parse une ligne individuelle du fichier .pd
-    std::unique_ptr<PdGuiObject> parseLine(const std::string& line);
     
     /// Parse un slider horizontal : #X obj x y hsl width height min max ...
     std::unique_ptr<PdGuiObject> parseHorizontalSlider(const std::vector<std::string>& tokens, ofVec2f pos);

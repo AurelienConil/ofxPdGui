@@ -74,12 +74,16 @@ public:
     /// @param position Position du subpatch dans le patch parent
     /// @param sendSymbol Symbole Pure Data pour l'envoi
     /// @param receiveSymbol Symbole Pure Data pour la réception
-    /// @param subpatchPath Chemin vers le fichier .pd du subpatch
+    /// @param subpatchPath Chemin vers le fichier .pd du subpatch (peut être vide pour inline)
     /// @param gopProps Propriétés GOP (intervalles et taille) du subpatch
+    /// @param inlineContent Contenu inline du subpatch (pour subpatches intégrés)
+    /// @param canvasSize Taille du canvas du subpatch pour la conversion de coordonnées
     PdSubpatch(ofVec2f position,
                const std::string& sendSymbol, const std::string& receiveSymbol,
                const std::string& subpatchPath,
-               const GopProperties& gopProps);
+               const GopProperties& gopProps,
+               const std::vector<std::string>& inlineContent = {},
+               const ofVec2f& canvasSize = ofVec2f(450, 300));
     
     /// Destructeur - nettoie les objets enfants
     virtual ~PdSubpatch() = default;
@@ -143,6 +147,8 @@ private:
     std::vector<std::unique_ptr<PdGuiObject>> children;  ///< Collection des objets enfants
     std::string subpatchPath;                           ///< Chemin vers le fichier .pd
     GopProperties gopProps;                             ///< Propriétés GOP du subpatch
+    std::vector<std::string> inlineContent;             ///< Contenu inline pour subpatches intégrés
+    ofVec2f canvasSize;                                 ///< Taille du canvas pour conversion de coordonnées
     
     // === MÉTHODES PRIVÉES ===
     /// Charge et parse le fichier subpatch
@@ -153,6 +159,9 @@ private:
     
     /// Applique la transformation GOP à une position donnée
     ofVec2f transformGopCoordinates(const ofVec2f& localPos) const;
+    
+    /// Convertit les coordonnées canvas en coordonnées GOP
+    ofVec2f canvasToGopCoordinates(const ofVec2f& canvasPos) const;
     
     /// Trouve l'objet enfant à une position donnée (pour délégation événements)
     PdGuiObject* findChildAt(ofVec2f position);

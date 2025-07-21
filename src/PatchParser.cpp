@@ -502,6 +502,16 @@ unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& li
     GopProperties gopProps;
     SubpatchRestoreInfo restoreInfo;
     restoreInfo.isValid = false;
+    vector<string> subpatchContent;
+    ofVec2f canvasSize(450, 300); // Taille par défaut
+    
+    // Extraire les propriétés du canvas depuis la ligne #N canvas
+    string canvasLine = lines[currentLineIndex];
+    vector<string> canvasTokens = splitString(canvasLine, ' ');
+    if (canvasTokens.size() >= 6) {
+        canvasSize.x = ofToFloat(canvasTokens[4]);
+        canvasSize.y = ofToFloat(canvasTokens[5]);
+    }
     
     // Parcourir le bloc jusqu'à trouver #X restore
     int startIndex = currentLineIndex;
@@ -514,11 +524,14 @@ unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& li
         if(line.find("#X coords") == 0) {
             gopProps = parseGopProperties(line);
         }
-        
         // Chercher la ligne #X restore pour la fin du bloc
-        if(line.find("#X restore") == 0) {
+        else if(line.find("#X restore") == 0) {
             restoreInfo = parseRestoreLine(line);
             break;
+        }
+        // Collecter les autres lignes comme contenu du subpatch
+        else {
+            subpatchContent.push_back(line);
         }
         
         currentLineIndex++;
@@ -536,28 +549,41 @@ unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& li
         return nullptr;
     }
     
-    // Créer le nom du fichier subpatch
-    string subpatchPath = restoreInfo.subpatchName + ".pd";
+    // Créer le nom du fichier subpatch (pour référence, même si on utilise le contenu inline)
+    string subpatchPath = restoreInfo.subpatchName;
     
     // Symboles send/receive par défaut
     string sendSymbol = restoreInfo.subpatchName + "_send";
     string receiveSymbol = restoreInfo.subpatchName + "_receive";
     
     try {
-        // Créer le subpatch GOP
+        // Créer le subpatch GOP avec le contenu inline
         auto subpatch = make_unique<PdSubpatch>(
             restoreInfo.position,
             sendSymbol,
             receiveSymbol,
             subpatchPath,
-            gopProps
+            gopProps,
+            subpatchContent,
+            canvasSize
         );
         
-        ofLogNotice("PdPatchParser") << "Created GOP subpatch: " << restoreInfo.subpatchName 
+        ofLogNotice("PdPatchParser") << "Created inline GOP subpatch: " << restoreInfo.subpatchName 
                                      << " at (" << restoreInfo.position.x << ", " << restoreInfo.position.y << ")"
-                                     << " with GOP properties (minX:" << gopProps.minX << ", minY:" << gopProps.minY
+                                     << " with canvas size " << canvasSize.x << "x" << canvasSize.y
+                                     << " and GOP properties (minX:" << gopProps.minX << ", minY:" << gopProps.minY
                                      << ", maxX:" << gopProps.maxX << ", maxY:" << gopProps.maxY
-                                     << ", size:" << gopProps.widthInPixels << "x" << gopProps.heightInPixels << ")";
+                                     << ", size:" << gopProps.widthInPixels << "x" << gopProps.heightInPixels << ")"
+                                     << " containing " << subpatchContent.size() << " content lines";
+        
+        return subpatch;
+        
+    } catch(const exception& e) {
+        ofLogError("PdPatchParser") << "Failed to create GOP subpatch " << restoreInfo.subpatchName 
+                                    << ": " << e.what();
+        return nullptr;
+    }
+}
         
         return subpatch;
         

@@ -29,10 +29,14 @@
 PdSubpatch::PdSubpatch(ofVec2f position,
                        const std::string& sendSymbol, const std::string& receiveSymbol,
                        const std::string& subpatchPath,
-                       const GopProperties& gopProps)
+                       const GopProperties& gopProps,
+                       const std::vector<std::string>& inlineContent,
+                       const ofVec2f& canvasSize)
     : PdGuiObject(GuiType::SUBPATCH, position, ofVec2f(gopProps.widthInPixels, gopProps.heightInPixels), sendSymbol, receiveSymbol)
     , subpatchPath(subpatchPath)
     , gopProps(gopProps)
+    , inlineContent(inlineContent)
+    , canvasSize(canvasSize)
 {
     // Vérifier que le subpatch est en mode GOP
     if (!gopProps.isGop) {
@@ -151,7 +155,10 @@ void PdSubpatch::addChild(std::unique_ptr<PdGuiObject> child) {
     if (child) {
         // Transformer les coordonnées de l'objet enfant selon le mapping GOP
         ofVec2f childPos = child->getPosition();
-        ofVec2f transformedPos = transformGopCoordinates(childPos);
+        
+        // Si l'objet vient d'un canvas, d'abord convertir vers GOP, puis vers pixels
+        ofVec2f gopPos = canvasToGopCoordinates(childPos);
+        ofVec2f transformedPos = transformGopCoordinates(gopPos);
         child->setPosition(transformedPos);
         
         // Configurer les callbacks pour l'objet enfant
@@ -168,20 +175,41 @@ void PdSubpatch::clearChildren() {
 
 bool PdSubpatch::loadSubpatch() {
     try {
-        // Utiliser le parser existant pour charger le subpatch
-        PdPatchParser parser;
-        auto subpatchObjects = parser.parseFile(subpatchPath);
-        
-        // Ajouter les objets (la transformation des coordonnées se fait dans addChild)
-        for (auto& obj : subpatchObjects) {
-            if (obj) {
-                addChild(std::move(obj));
+        // Vérifier si on a du contenu inline
+        if (!inlineContent.empty()) {
+            // Traiter le contenu inline
+            PdPatchParser parser;
+            for (const auto& line : inlineContent) {
+                auto obj = parser.parseLine(line);
+                if (obj) {
+                    addChild(std::move(obj));
+                }
             }
+            
+            ofLogNotice("PdSubpatch") << "Successfully loaded inline subpatch content with " 
+                                      << children.size() << " objects";
+            return true;
         }
         
-        ofLogNotice("PdSubpatch") << "Successfully loaded subpatch: " << subpatchPath 
-                                  << " with " << children.size() << " objects";
-        return true;
+        // Sinon, essayer de charger depuis un fichier externe
+        if (!subpatchPath.empty()) {
+            PdPatchParser parser;
+            auto subpatchObjects = parser.parseFile(subpatchPath);
+            
+            // Ajouter les objets (la transformation des coordonnées se fait dans addChild)
+            for (auto& obj : subpatchObjects) {
+                if (obj) {
+                    addChild(std::move(obj));
+                }
+            }
+            
+            ofLogNotice("PdSubpatch") << "Successfully loaded external subpatch: " << subpatchPath 
+                                      << " with " << children.size() << " objects";
+            return true;
+        }
+        
+        ofLogWarning("PdSubpatch") << "No content available for subpatch (neither inline nor external file)";
+        return false;
         
     } catch (const std::exception& e) {
         ofLogError("PdSubpatch") << "Failed to load subpatch " << subpatchPath 
@@ -218,6 +246,18 @@ ofVec2f PdSubpatch::transformGopCoordinates(const ofVec2f& localPos) const {
     float pixelY = position.y + normalizedY * gopProps.heightInPixels;
     
     return ofVec2f(pixelX, pixelY);
+}
+
+ofVec2f PdSubpatch::canvasToGopCoordinates(const ofVec2f& canvasPos) const {
+    // Convertir les coordonnées canvas en coordonnées GOP normalisées
+    float normalizedCanvasX = canvasPos.x / canvasSize.x;
+    float normalizedCanvasY = canvasPos.y / canvasSize.y;
+    
+    // Mapper vers la plage GOP
+    float gopX = normalizedCanvasX * (gopProps.maxX - gopProps.minX) + gopProps.minX;
+    float gopY = normalizedCanvasY * (gopProps.maxY - gopProps.minY) + gopProps.minY;
+    
+    return ofVec2f(gopX, gopY);
 }
 
 PdGuiObject* PdSubpatch::findChildAt(ofVec2f position) {
