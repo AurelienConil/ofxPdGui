@@ -53,12 +53,33 @@
 #include "Slider.h"
 #include "NumberBox.h"
 #include "Canvas.h"
-#include "Subpatch.h"
 #include <vector>
 #include <string>
 #include <memory>
 #include <fstream>
 #include <sstream>
+
+/**
+ * GOP Properties structure for Pure Data Graph-on-Parent subpatches
+ */
+struct GopProperties {
+    float minX, minY;           // Normalized coordinate ranges
+    float maxX, maxY;
+    float widthInPixels;        // GOP rectangle size in pixels
+    float heightInPixels;
+    bool isGop;                 // Whether this subpatch is GOP-enabled
+    
+    GopProperties() : minX(0), minY(0), maxX(1), maxY(1), 
+                     widthInPixels(100), heightInPixels(100), isGop(false) {}
+                     
+    GopProperties(float minX, float minY, float maxX, float maxY,
+                  float width, float height, bool gop = true)
+        : minX(minX), minY(minY), maxX(maxX), maxY(maxY),
+          widthInPixels(width), heightInPixels(height), isGop(gop) {}
+};
+
+// Forward declaration to avoid circular dependency
+class PdSubpatch;
 
 /**
  * @class PdPatchParser
@@ -88,10 +109,11 @@ public:
     /// @return Collection d'objets GUI prêts pour le rendu
     std::vector<std::unique_ptr<PdGuiObject>> parseFile(const std::string& filename);
     
+    /// Parse une ligne individuelle du fichier .pd (méthode publique pour usage par PdSubpatch)
+    std::unique_ptr<PdGuiObject> parseLine(const std::string& line);
+    
 private:
     // === PARSERS SPÉCIALISÉS ===
-    /// Parse une ligne individuelle du fichier .pd
-    std::unique_ptr<PdGuiObject> parseLine(const std::string& line);
     
     /// Parse un slider horizontal : #X obj x y hsl width height min max ...
     std::unique_ptr<PdGuiObject> parseHorizontalSlider(const std::vector<std::string>& tokens, ofVec2f pos);
@@ -113,6 +135,20 @@ private:
     
     /// Parse un subpatch : #X restore x y pd name ou #N canvas ...
     std::unique_ptr<PdGuiObject> parseSubpatch(const std::vector<std::string>& tokens, ofVec2f pos);
+    
+    /// Parse un bloc complet de subpatch GOP (de #N canvas à #X restore)
+    std::unique_ptr<PdGuiObject> parseGopSubpatch(const std::vector<std::string>& lines, int& currentLineIndex);
+    
+    /// Extrait les propriétés GOP depuis une ligne #X coords
+    GopProperties parseGopProperties(const std::string& line);
+    
+    /// Parse une ligne #X restore et retourne les informations de position/nom
+    struct SubpatchRestoreInfo {
+        ofVec2f position;
+        std::string subpatchName;
+        bool isValid;
+    };
+    SubpatchRestoreInfo parseRestoreLine(const std::string& line);
     
     // === UTILITAIRES ===
     /// Divise une chaîne selon un délimiteur

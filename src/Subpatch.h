@@ -43,24 +43,29 @@
 #include <memory>
 #include <string>
 
+// Forward declaration  
+struct GopProperties;
+
 /**
  * @class PdSubpatch
- * @brief Implémentation de l'objet Subpatch Pure Data avec méthode "flat"
+ * @brief Implémentation de l'objet Subpatch Pure Data avec support GOP (Graph-on-Parent)
  * 
- * Cette classe permet d'intégrer des sous-patches Pure Data en instanciant
- * tous leurs objets GUI comme s'ils étaient dans le patch principal.
+ * Cette classe gère exclusivement les subpatches Pure Data en mode GOP
+ * (Graph-on-Parent, "Dessiner dans le patch parent"). Elle transforme
+ * les coordonnées normalisées des objets enfants en coordonnées pixels
+ * selon les propriétés GOP du subpatch.
  * 
- * ARCHITECTURE "FLAT" :
- * - Les objets enfants ont des coordonnées absolues dans l'espace du patch principal
- * - Pas de rendu hiérarchique - tous les objets sont au même niveau
- * - Délégation transparente des événements aux objets appropriés
- * - Support de la récursivité pour les subpatches imbriqués
+ * FONCTIONNEMENT GOP :
+ * - Seuls les subpatches avec GOP activé sont supportés
+ * - Les coordonnées des objets enfants sont normalisées (ex: X:0-1, Y:-1 à 1)
+ * - Transformation en coordonnées pixel selon la formule :
+ *   pixelX = posParentX + ((objX - minX) / (maxX - minX)) * widthInPixels
+ *   pixelY = posParentY + ((objY - minY) / (maxY - minY)) * heightInPixels
  * 
- * GESTION DES OBJETS ENFANTS :
- * - Chargement automatique du fichier .pd du subpatch
- * - Transformation des coordonnées relatives en absolues
- * - Gestion du cycle de vie des objets enfants
- * - Propagation des états et propriétés
+ * PROPRIÉTÉS GOP :
+ * - minX, minY, maxX, maxY : Intervalles des coordonnées normalisées
+ * - widthInPixels, heightInPixels : Taille du rectangle GOP en pixels
+ * - Position dans le patch parent définie par les coordonnées du #X restore
  */
 
 #include "PdGuiObject.h"
@@ -69,18 +74,20 @@
 class PdSubpatch : public PdGuiObject {
 public:
     // === CONSTRUCTION ET DESTRUCTION ===
-    /// Constructeur principal - charge et initialise le subpatch
+    /// Constructeur principal - charge et initialise le subpatch GOP
     /// @param position Position du subpatch dans le patch parent
-    /// @param size Taille du subpatch (peut être utilisée pour clipping)
     /// @param sendSymbol Symbole Pure Data pour l'envoi
     /// @param receiveSymbol Symbole Pure Data pour la réception
-    /// @param subpatchPath Chemin vers le fichier .pd du subpatch
-    /// @param offsetX Décalage X pour transformer les coordonnées enfants
-    /// @param offsetY Décalage Y pour transformer les coordonnées enfants
-    PdSubpatch(ofVec2f position, ofVec2f size,
+    /// @param subpatchPath Chemin vers le fichier .pd du subpatch (peut être vide pour inline)
+    /// @param gopProps Propriétés GOP (intervalles et taille) du subpatch
+    /// @param inlineContent Contenu inline du subpatch (pour subpatches intégrés)
+    /// @param canvasSize Taille du canvas du subpatch pour la conversion de coordonnées
+    PdSubpatch(ofVec2f position,
                const std::string& sendSymbol, const std::string& receiveSymbol,
                const std::string& subpatchPath,
-               float offsetX = 0.0f, float offsetY = 0.0f);
+               const GopProperties& gopProps,
+               const std::vector<std::string>& inlineContent = {},
+               const ofVec2f& canvasSize = ofVec2f(450, 300));
     
     /// Destructeur - nettoie les objets enfants
     virtual ~PdSubpatch() = default;
@@ -133,22 +140,32 @@ public:
     /// Chemin du fichier subpatch
     const std::string& getSubpatchPath() const { return subpatchPath; }
     
-    /// Décalages pour la transformation des coordonnées
-    ofVec2f getOffset() const { return ofVec2f(offsetX, offsetY); }
-    void setOffset(float x, float y) { offsetX = x; offsetY = y; transformChildrenCoordinates(); }
+    /// Propriétés GOP du subpatch
+    const GopProperties& getGopProperties() const { return gopProps; }
     
+    /// Vérifie si le subpatch est en mode GOP
+    bool isGopEnabled() const { return gopProps.isGop; }
+
 private:
     // === PROPRIÉTÉS PRIVÉES ===
     std::vector<std::unique_ptr<PdGuiObject>> children;  ///< Collection des objets enfants
     std::string subpatchPath;                           ///< Chemin vers le fichier .pd
-    float offsetX, offsetY;                             ///< Décalages pour transformation coords
+    GopProperties gopProps;                             ///< Propriétés GOP du subpatch
+    std::vector<std::string> inlineContent;             ///< Contenu inline pour subpatches intégrés
+    ofVec2f canvasSize;                                 ///< Taille du canvas pour conversion de coordonnées
     
     // === MÉTHODES PRIVÉES ===
     /// Charge et parse le fichier subpatch
     bool loadSubpatch();
     
-    /// Transforme les coordonnées des objets enfants en coordonnées absolues
+    /// Transforme les coordonnées des objets enfants selon le mapping GOP
     void transformChildrenCoordinates();
+    
+    /// Applique la transformation GOP à une position donnée
+    ofVec2f transformGopCoordinates(const ofVec2f& localPos) const;
+    
+    /// Convertit les coordonnées canvas en coordonnées GOP
+    ofVec2f canvasToGopCoordinates(const ofVec2f& canvasPos) const;
     
     /// Trouve l'objet enfant à une position donnée (pour délégation événements)
     PdGuiObject* findChildAt(ofVec2f position);
