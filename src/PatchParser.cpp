@@ -485,12 +485,17 @@ unique_ptr<PdGuiObject> PdPatchParser::parseSubpatch(const vector<string>& token
 /**
  * @brief Parse un bloc complet de subpatch GOP (de #N canvas à #X restore)
  * 
- * PROCESSUS REFACTORISÉ :
+ * PROCESSUS REFACTORISÉ (SANS BUFFER TEMPORAIRE) :
  * 1. Trouve la ligne #X coords avec les propriétés GOP
  * 2. Trouve la ligne #X restore avec la position et le nom  
  * 3. Valide que le subpatch est en mode GOP (GOP_flag = 1)
- * 4. Traite directement les lignes d'objets GUI via parseLine() (sans buffer temporaire)
- * 5. Crée le subpatch avec les objets déjà traités
+ * 4. Traite directement les lignes d'objets GUI via parseLine() au fur et à mesure
+ * 5. Crée le subpatch avec les objets déjà traités et transformés
+ * 
+ * AMÉLIORATION PAR RAPPORT À L'ANCIEN CODE :
+ * - Élimine le buffer temporaire subpatchContent
+ * - Traite les objets immédiatement au lieu de les collecter puis les traiter
+ * - Réduit la latence et l'utilisation mémoire
  * 
  * @param lines Toutes les lignes du fichier
  * @param currentLineIndex Index de la ligne #N canvas (sera mis à jour)
