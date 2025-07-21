@@ -565,7 +565,7 @@ unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& li
             restoreInfo.position,
             sendSymbol,
             receiveSymbol,
-            subpatchPath,
+            "", // Empty subpatch path since we have parsed objects directly
             gopProps,
             vector<string>(), // Empty inline content since we have parsed objects
             canvasSize
