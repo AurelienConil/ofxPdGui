@@ -3,7 +3,20 @@
  * @brief Implémentation de la classe PdSubpatch pour le support des sous-patches
  * 
  * Ce fichier contient l'implémentation complète de la classe PdSubpatch qui
- * permet l'intégration de sous-patches Pure Data en utilisant la méthode "flat".
+ * permet l'intégration de sous-patches Pure Data en utilisant ofVec2f PdSubpatch::transformGopCoordinates(const ofVec2f& canvasCoords) {
+    // Les coordonnées doivent être RELATIVES au subpatch, pas absolues
+    // Dans l'architecture actuelle, ofApp::drawGuiObjects() fait déjà un ofTranslate()
+    // pour positionner le subpatch, donc les enfants doivent être en coordonnées locales
+    
+    // Transformation GOP : du canvas vers l'espace GOP local
+    float localX = (canvasCoords.x - gopProps.minX) / (gopProps.maxX - gopProps.minX) * gopProps.widthInPixels;
+    float localY = (canvasCoords.y - gopProps.minY) / (gopProps.maxY - gopProps.minY) * gopProps.heightInPixels;
+    
+    ofLogNotice("PdSubpatch") << "GOP transform: canvas(" << canvasCoords.x << "," << canvasCoords.y 
+                              << ") -> local(" << localX << "," << localY << ")";
+    
+    return ofVec2f(localX, localY);
+}at".
  * 
  * ARCHITECTURE D'IMPLÉMENTATION :
  * 1. Chargement du fichier .pd du subpatch
@@ -58,11 +71,28 @@ void PdSubpatch::update() {
 }
 
 void PdSubpatch::draw() {
-    // Méthode "flat" : les objets enfants sont rendus directement
-    // Pas de transformation ni de clipping - ils ont déjà les bonnes coordonnées absolues
-    for (auto& child : children) {
+    // Dessiner le contour de la zone GOP du subpatch
+    ofPushStyle();
+    ofSetColor(100, 100, 255, 128); // Bleu semi-transparent
+    ofNoFill();
+    ofSetLineWidth(2);
+    ofDrawRectangle(0, 0, getSize().x, getSize().y);
+    
+    // Optionnel : ajouter un label
+    ofSetColor(80, 80, 200);
+    ofDrawBitmapString("GOP", 5, 15);
+    ofPopStyle();
+    
+    // Méthode "flat" avec transformation correcte pour chaque enfant
+    // Reproduire la logique d'ofApp::drawGuiObjects() pour les enfants
+    for (int i = 0; i < children.size(); i++) {
+        auto& child = children[i];
         if (child && child->isVisible()) {
+            // Même logique que ofApp::drawGuiObjects() : ofTranslate + draw
+            ofPushMatrix();
+            ofTranslate(child->getPosition().x, child->getPosition().y);
             child->draw();
+            ofPopMatrix();
         }
     }
 }
@@ -116,16 +146,16 @@ bool PdSubpatch::onMouseMoved(ofMouseEventArgs& args) {
 }
 
 void PdSubpatch::setValue(float value) {
-    // Mettre à jour la valeur de base
-    setValue(value);
+    // Mettre à jour la valeur de base (appeler la méthode parent)
+    PdGuiObject::setValue(value);
     
     // Optionnel : propager la valeur aux objets enfants
     // (dépend du comportement souhaité)
 }
 
 void PdSubpatch::setVisible(bool visible) {
-    // Mettre à jour la visibilité de base
-    setVisible(visible);
+    // Mettre à jour la visibilité de base (appeler la méthode parent)
+    PdGuiObject::setVisible(visible);
     
     // Propager aux objets enfants
     propagateToChildren([visible](PdGuiObject* child) {
@@ -134,8 +164,8 @@ void PdSubpatch::setVisible(bool visible) {
 }
 
 void PdSubpatch::setEnabled(bool enabled) {
-    // Mettre à jour l'état enabled de base
-    setEnabled(enabled);
+    // Mettre à jour l'état enabled de base (appeler la méthode parent)
+    PdGuiObject::setEnabled(enabled);
     
     // Propager aux objets enfants
     propagateToChildren([enabled](PdGuiObject* child) {
@@ -153,13 +183,18 @@ bool PdSubpatch::reload() {
 
 void PdSubpatch::addChild(std::unique_ptr<PdGuiObject> child) {
     if (child) {
-        // Transformer les coordonnées de l'objet enfant selon le mapping GOP
+        // Les coordonnées des objets enfants doivent être relatives à l'origine de la zone GOP
         ofVec2f childPos = child->getPosition();
         
-        // Si l'objet vient d'un canvas, d'abord convertir vers GOP, puis vers pixels
-        ofVec2f gopPos = canvasToGopCoordinates(childPos);
-        ofVec2f transformedPos = transformGopCoordinates(gopPos);
-        child->setPosition(transformedPos);
+        // Soustraire l'origine de la zone graphique GOP pour obtenir les coordonnées relatives
+        // Dans #X coords 0 -1 1 1 200 60 1 100 100, les derniers 100 100 sont l'origine
+        ofVec2f relativePos = childPos - ofVec2f(100, 100); // TODO: utiliser gopProps.originX/Y
+        
+        ofLogNotice("PdSubpatch") << "Child canvas pos (" << childPos.x << ", " << childPos.y 
+                                 << ") - GOP origin (100, 100) = relative (" 
+                                 << relativePos.x << ", " << relativePos.y << ")";
+        
+        child->setPosition(relativePos);
         
         // Configurer les callbacks pour l'objet enfant
         child->onSendToPd = this->onSendToPd;
@@ -174,15 +209,21 @@ void PdSubpatch::clearChildren() {
 }
 
 bool PdSubpatch::loadSubpatch() {
+    ofLogNotice("PdSubpatch") << "loadSubpatch() called with " << inlineContent.size() << " inline content lines";
     try {
         // Vérifier si on a du contenu inline
         if (!inlineContent.empty()) {
+            ofLogNotice("PdSubpatch") << "Processing inline content...";
             // Traiter le contenu inline
             PdPatchParser parser;
             for (const auto& line : inlineContent) {
+                ofLogNotice("PdSubpatch") << "Processing inline line: " << line;
                 auto obj = parser.parseLine(line);
                 if (obj) {
+                    ofLogNotice("PdSubpatch") << "Created object, calling addChild()";
                     addChild(std::move(obj));
+                } else {
+                    ofLogNotice("PdSubpatch") << "No object created from line: " << line;
                 }
             }
             
@@ -234,31 +275,24 @@ void PdSubpatch::transformChildrenCoordinates() {
                               << ", maxY:" << gopProps.maxY << ")";
 }
 
-ofVec2f PdSubpatch::transformGopCoordinates(const ofVec2f& localPos) const {
-    // Appliquer la formule de transformation GOP :
-    // pixelX = posParentX + ((objX - minX) / (maxX - minX)) * widthInPixels
-    // pixelY = posParentY + ((objY - minY) / (maxY - minY)) * heightInPixels
+ofVec2f PdSubpatch::transformGopCoordinates(const ofVec2f& canvasPos) const {
+    // Approche simple selon votre intuition :
+    // Les coordonnées du canvas sont directement placées dans la zone GOP
+    // Zone GOP : position + coordonnées relatives
     
-    float normalizedX = (localPos.x - gopProps.minX) / (gopProps.maxX - gopProps.minX);
-    float normalizedY = (localPos.y - gopProps.minY) / (gopProps.maxY - gopProps.minY);
+    float pixelX = position.x + canvasPos.x;
+    float pixelY = position.y + canvasPos.y;
     
-    float pixelX = position.x + normalizedX * gopProps.widthInPixels;
-    float pixelY = position.y + normalizedY * gopProps.heightInPixels;
+    ofLogNotice("PdSubpatch") << "Simple transform: canvas(" << canvasPos.x << "," << canvasPos.y 
+                              << ") + GOP base(" << position.x << "," << position.y 
+                              << ") = final(" << pixelX << "," << pixelY << ")";
     
     return ofVec2f(pixelX, pixelY);
 }
 
-ofVec2f PdSubpatch::canvasToGopCoordinates(const ofVec2f& canvasPos) const {
-    // Convertir les coordonnées canvas en coordonnées GOP normalisées
-    float normalizedCanvasX = canvasPos.x / canvasSize.x;
-    float normalizedCanvasY = canvasPos.y / canvasSize.y;
-    
-    // Mapper vers la plage GOP
-    float gopX = normalizedCanvasX * (gopProps.maxX - gopProps.minX) + gopProps.minX;
-    float gopY = normalizedCanvasY * (gopProps.maxY - gopProps.minY) + gopProps.minY;
-    
-    return ofVec2f(gopX, gopY);
-}
+// Note: La fonction canvasToGopCoordinates() a été supprimée car elle était incorrecte.
+// En Pure Data GOP, les coordonnées des objets sont directement dans l'espace GOP
+// défini par les coords, pas dans l'espace du canvas parent.
 
 PdGuiObject* PdSubpatch::findChildAt(ofVec2f position) {
     // Trouver l'objet enfant à la position donnée

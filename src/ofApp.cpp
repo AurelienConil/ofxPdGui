@@ -340,7 +340,9 @@ void ofApp::setupFbo() {
 
 void ofApp::drawGuiObjects() {
     // Méthode 1: Dessin direct (plus simple pour le test)
-    for (auto& obj : guiObjects) {
+    
+    for (int i = 0; i < guiObjects.size(); i++) {
+        auto& obj = guiObjects[i];
         if (obj->isVisible()) {
             ofPushMatrix();
             ofTranslate(obj->getPosition().x, obj->getPosition().y);

@@ -20,6 +20,11 @@ PdBang::PdBang(ofVec2f position, ofVec2f size,
                const string& sendSymbol, const string& receiveSymbol)
     : PdGuiObject(GuiType::BANG, position, size, sendSymbol, receiveSymbol)
 {
+    // Log de création du bang
+    ofLogNotice("PdBang") << "CONSTRUCTOR: Creating bang at position (" << position.x << ", " << position.y 
+                          << ") size (" << size.x << ", " << size.y 
+                          << ") send=" << sendSymbol << " receive=" << receiveSymbol;
+    
     // Initialiser les valeurs spécifiques au bang
     minValue = 0.0f;
     maxValue = 1.0f;

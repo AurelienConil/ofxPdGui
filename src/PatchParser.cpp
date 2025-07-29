@@ -63,23 +63,33 @@ vector<unique_ptr<PdGuiObject>> PdPatchParser::parseFile(const string& filename)
     }
     
     // === PARSING LIGNE PAR LIGNE AVEC SUPPORT DES BLOCS SUBPATCH ===
-    auto lines = buffer.getLines();
+    // Convertir l'itérateur ofBuffer::getLines() en vecteur pour pouvoir utiliser les indices
+    vector<string> lines;
+    for(auto line : buffer.getLines()) {
+        lines.push_back(line);
+    }
+    
     for(int i = 0; i < lines.size(); i++) {
         string line = lines[i];
         
-        // Vérifier si c'est le début d'un bloc subpatch GOP
+        // Ignorer l'en-tête du patch principal (#N canvas en première ligne)
+        if(i == 0 && line.find("#N canvas") == 0) {
+            continue; // Passer l'en-tête du patch principal
+        }
+        
+        // Vérifier si c'est le début d'un bloc subpatch GOP (pas en première ligne)
         if(line.find("#N canvas") == 0) {
             // Parser le bloc complet de subpatch (multi-lignes)
             auto subpatch = parseGopSubpatch(lines, i);
             if(subpatch) {
-                objects.push_back(move(subpatch));
+                objects.push_back(std::move(subpatch));
             }
             // i est maintenant mis à jour par parseGopSubpatch pour pointer après le #X restore
         } else {
             // Parser les lignes simples (objets GUI individuels)
             auto obj = parseLine(line);
             if(obj) {
-                objects.push_back(move(obj));
+                objects.push_back(std::move(obj));
             }
         }
     }
@@ -185,8 +195,14 @@ unique_ptr<PdGuiObject> PdPatchParser::parseHorizontalSlider(const vector<string
     string receiveSym = tokens[11];
     
     // === FILTRAGE DES OBJETS SANS COMMUNICATION ===
-    // Ignorer les objets purement décoratifs (sans send/receive)
-    if(sendSym == "empty" && receiveSym == "empty") return nullptr;
+    // Pour les subpatches, accepter même les objets avec symboles empty
+    // Créer des symboles génériques si nécessaire
+    if(sendSym == "empty") {
+        sendSym = "hsl-" + ofToString(pos.x) + "-" + ofToString(pos.y);
+    }
+    if(receiveSym == "empty") {
+        receiveSym = sendSym; // Utiliser le même symbole
+    }
     
     // === EXTRACTION DES PARAMÈTRES ===
     ofVec2f size = ofVec2f(ofToFloat(tokens[5]), ofToFloat(tokens[6]));
@@ -222,8 +238,15 @@ unique_ptr<PdGuiObject> PdPatchParser::parseVerticalSlider(const vector<string>&
     string sendSym = tokens[10];
     string receiveSym = tokens[11];
     
-    // Ignorer les objets sans send/receive
-    if(sendSym == "empty" && receiveSym == "empty") return nullptr;
+    // === FILTRAGE DES OBJETS SANS COMMUNICATION ===
+    // Pour les subpatches, accepter même les objets avec symboles empty
+    // Créer des symboles génériques si nécessaire
+    if(sendSym == "empty") {
+        sendSym = "vsl-" + ofToString(pos.x) + "-" + ofToString(pos.y);
+    }
+    if(receiveSym == "empty") {
+        receiveSym = sendSym; // Utiliser le même symbole
+    }
     
     ofVec2f size = ofVec2f(ofToFloat(tokens[5]), ofToFloat(tokens[6]));
     float minVal = ofToFloat(tokens[7]);
@@ -256,7 +279,15 @@ unique_ptr<PdGuiObject> PdPatchParser::parseToggle(const vector<string>& tokens,
     string sendSym = tokens[8];
     string receiveSym = tokens[9];
     
-    if(sendSym == "empty" && receiveSym == "empty") return nullptr;
+    // === FILTRAGE DES OBJETS SANS COMMUNICATION ===
+    // Pour les subpatches, accepter même les objets avec symboles empty
+    // Créer des symboles génériques si nécessaire
+    if(sendSym == "empty") {
+        sendSym = "tgl-" + ofToString(pos.x) + "-" + ofToString(pos.y);
+    }
+    if(receiveSym == "empty") {
+        receiveSym = sendSym; // Utiliser le même symbole
+    }
     
     ofVec2f size = ofVec2f(ofToFloat(tokens[5]), ofToFloat(tokens[5])); // Carré
     
@@ -269,7 +300,15 @@ unique_ptr<PdGuiObject> PdPatchParser::parseBang(const vector<string>& tokens, o
     string sendSym = tokens[7];
     string receiveSym = tokens[8];
     
-    if(sendSym == "empty" && receiveSym == "empty") return nullptr;
+    // === FILTRAGE DES OBJETS SANS COMMUNICATION ===
+    // Pour les subpatches, accepter même les objets avec symboles empty
+    // Créer des symboles génériques si nécessaire
+    if(sendSym == "empty") {
+        sendSym = "bng-" + ofToString(pos.x) + "-" + ofToString(pos.y);
+    }
+    if(receiveSym == "empty") {
+        receiveSym = sendSym; // Utiliser le même symbole
+    }
     
     ofVec2f size = ofVec2f(ofToFloat(tokens[5]), ofToFloat(tokens[5]));
     
@@ -455,19 +494,22 @@ unique_ptr<PdGuiObject> PdPatchParser::parseSubpatch(const vector<string>& token
     string sendSymbol = subpatchName + "_send";
     string receiveSymbol = subpatchName + "_receive";
     
-    // Taille par défaut pour le subpatch (peut être étendue plus tard)
-    ofVec2f defaultSize(100, 100);
+    // Propriétés GOP par défaut (non-GOP)
+    GopProperties defaultGopProps; // Par défaut isGop = false
+    
+    // Taille par défaut pour le canvas du subpatch
+    ofVec2f defaultCanvasSize(450, 300);
     
     try {
-        // Créer l'objet PdSubpatch
+        // Créer l'objet PdSubpatch avec la bonne signature de constructeur
         auto subpatch = make_unique<PdSubpatch>(
-            pos,
-            defaultSize,
-            sendSymbol,
-            receiveSymbol,
-            subpatchPath,
-            pos.x, // Utiliser la position comme offset de base
-            pos.y
+            pos,                    // position
+            sendSymbol,             // sendSymbol
+            receiveSymbol,          // receiveSymbol
+            subpatchPath,           // subpatchPath
+            defaultGopProps,        // gopProps
+            vector<string>(),       // inlineContent (vide pour fichiers externes)
+            defaultCanvasSize       // canvasSize
         );
         
         ofLogNotice("PdPatchParser") << "Created subpatch: " << subpatchName 
@@ -514,7 +556,6 @@ unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& li
     }
     
     // Parcourir le bloc jusqu'à trouver #X restore
-    int startIndex = currentLineIndex;
     currentLineIndex++; // Passer la ligne #N canvas
     
     while(currentLineIndex < lines.size()) {
@@ -575,15 +616,6 @@ unique_ptr<PdGuiObject> PdPatchParser::parseGopSubpatch(const vector<string>& li
                                      << ", maxX:" << gopProps.maxX << ", maxY:" << gopProps.maxY
                                      << ", size:" << gopProps.widthInPixels << "x" << gopProps.heightInPixels << ")"
                                      << " containing " << subpatchContent.size() << " content lines";
-        
-        return subpatch;
-        
-    } catch(const exception& e) {
-        ofLogError("PdPatchParser") << "Failed to create GOP subpatch " << restoreInfo.subpatchName 
-                                    << ": " << e.what();
-        return nullptr;
-    }
-}
         
         return subpatch;
         
