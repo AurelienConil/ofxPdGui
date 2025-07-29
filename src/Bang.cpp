@@ -6,6 +6,7 @@
 //
 
 #include "Bang.h"
+#include "ofApp.h" // Pour accéder aux méthodes statiques du mode
 
 // Couleurs fixes pour le bang
 const ofColor PdBang::BANG_BG_COLOR = ofColor(240, 240, 240);
@@ -20,17 +21,16 @@ PdBang::PdBang(ofVec2f position, ofVec2f size,
                const string& sendSymbol, const string& receiveSymbol)
     : PdGuiObject(GuiType::BANG, position, size, sendSymbol, receiveSymbol)
 {
-    // Log de création du bang
-    ofLogNotice("PdBang") << "CONSTRUCTOR: Creating bang at position (" << position.x << ", " << position.y 
-                          << ") size (" << size.x << ", " << size.y 
-                          << ") send=" << sendSymbol << " receive=" << receiveSymbol;
-    
     // Initialiser les valeurs spécifiques au bang
     minValue = 0.0f;
     maxValue = 1.0f;
     currentValue = 0.0f;
     triggered = false;
     triggerTime = 0.0f;
+    
+    // Initialiser les variables de déplacement
+    isDraggingObject = false;
+    dragOffset = ofVec2f(0, 0);
 }
 
 void PdBang::update() {
@@ -50,7 +50,6 @@ void PdBang::draw() {
     // Dessiner le cercle si le bang est déclenché
     drawCircle();
     
-    
     // Dessiner la bordure
     drawBangBorder();
     
@@ -63,17 +62,47 @@ bool PdBang::onMousePressed(ofMouseEventArgs& args) {
     bool handled = PdGuiObject::onMousePressed(args);
     
     if (handled) {
-        // Déclencher le bang
-        trigger();
-        
-        // Envoyer un "bang" à Pure Data
-        sendToPd(1.0f); // ou sendBangToPd() si vous avez une méthode spécifique
+        if (ofApp::isGlobalEditMode()) {
+            // MODE ÉDITION : Préparer le déplacement de l'objet
+            isDraggingObject = true;
+            ofVec2f mousePos(args.x, args.y);
+            dragOffset = mousePos - position;
+            ofLogNotice("PdBang") << "Mode édition : début du drag pour " << sendSymbol;
+        } else {
+            // MODE UTILISATION : Déclencher le bang normalement
+            trigger();
+            sendToPd(1.0f);
+            ofLogNotice("PdBang") << "Mode utilisation : bang déclenché pour " << sendSymbol;
+        }
+    }
+    
+    return handled;
+}
+
+bool PdBang::onMouseDragged(ofMouseEventArgs& args) {
+    // Appeler la méthode de base
+    bool handled = PdGuiObject::onMouseDragged(args);
+    
+    if (ofApp::isGlobalEditMode() && isDraggingObject) {
+        // MODE ÉDITION : Déplacer l'objet
+        ofVec2f mousePos(args.x, args.y);
+        ofVec2f newPosition = mousePos - dragOffset;
+        setPosition(newPosition);
+        ofLogVerbose("PdBang") << "Déplacement vers (" << newPosition.x << ", " << newPosition.y << ")";
+        return true;
     }
     
     return handled;
 }
 
 bool PdBang::onMouseReleased(ofMouseEventArgs& args) {
+    // Finaliser le déplacement en mode édition
+    if (ofApp::isGlobalEditMode() && isDraggingObject) {
+        isDraggingObject = false;
+        ofLogNotice("PdBang") << "Mode édition : fin du drag pour " << sendSymbol 
+                              << " à la position (" << position.x << ", " << position.y << ")";
+    }
+    
     // Appeler la méthode de base
     return PdGuiObject::onMouseReleased(args);
 }
@@ -87,6 +116,12 @@ void PdBang::trigger() {
 void PdBang::drawBangState() {
     // Couleur de fond
     ofColor bgColor = BANG_BG_COLOR;
+    
+    // Adapter la couleur selon le mode
+    if (ofApp::isGlobalEditMode()) {
+        // Mode édition : arrière-plan légèrement teinté de rouge
+        bgColor = bgColor.getLerped(ofColor::red, 0.1f);
+    }
     
     // Modifier la couleur selon l'état de la souris
     if (mousePressed) {

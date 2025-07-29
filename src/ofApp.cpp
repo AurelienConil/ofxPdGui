@@ -21,6 +21,9 @@
 
 #include "ofApp.h"
 
+// Définition de la variable statique globale pour le mode édition
+bool ofApp::globalEditMode = true; // Démarre en mode édition
+
 /**
  * @brief Initialisation principale de l'application
  * 
@@ -93,6 +96,12 @@ void ofApp::draw() {
     ofDrawBitmapString("Pure Data Patch Renderer - ofxPdGui", 20, 30);
     ofDrawBitmapString("Total objects: " + ofToString(guiObjects.size()), 20, 50);
     ofDrawBitmapString("Active toggles: " + ofToString(countActiveToggles()), 20, 70);
+    
+    // === AFFICHAGE DU MODE ACTUEL ===
+    string modeText = "Mode: " + string(currentMode == AppMode::EDIT_MODE ? "ÉDITION" : "UTILISATION");
+    modeText += " (Espace pour basculer, E/U pour forcer)";
+    ofSetColor(currentMode == AppMode::EDIT_MODE ? ofColor::red : ofColor::green);
+    ofDrawBitmapString(modeText, 20, 90);
     
     // === RENDU DES OBJETS GUI ===
     // Méthode actuelle : rendu direct pour la simplicité
@@ -212,6 +221,41 @@ void ofApp::keyPressed(int key) {
             ofLogNotice("ofApp") << "Random toggle: " << toggle->getSendSymbol();
         }
     }
+    else if (key == 'e') {
+        // Activer le mode édition
+        setEditMode();
+    }
+    else if (key == 'u') {
+        // Activer le mode utilisation
+        setUseMode();
+    }
+    else if (key == ' ') {
+        // Barre espace : basculer entre les modes
+        toggleMode();
+    }
+}
+
+//--------------------------------------------------------------
+void ofApp::toggleMode() {
+    if (currentMode == AppMode::EDIT_MODE) {
+        setUseMode();
+    } else {
+        setEditMode();
+    }
+}
+
+//--------------------------------------------------------------
+void ofApp::setEditMode() {
+    currentMode = AppMode::EDIT_MODE;
+    globalEditMode = true;
+    ofLogNotice("ofApp") << "Mode ÉDITION activé - Objets déplaçables, interactions figées";
+}
+
+//--------------------------------------------------------------
+void ofApp::setUseMode() {
+    currentMode = AppMode::USE_MODE;
+    globalEditMode = false;
+    ofLogNotice("ofApp") << "Mode UTILISATION activé - Interactions normales, objets fixes";
 }
 
 void ofApp::createToggles() {
@@ -340,9 +384,7 @@ void ofApp::setupFbo() {
 
 void ofApp::drawGuiObjects() {
     // Méthode 1: Dessin direct (plus simple pour le test)
-    
-    for (int i = 0; i < guiObjects.size(); i++) {
-        auto& obj = guiObjects[i];
+    for (auto& obj : guiObjects) {
         if (obj->isVisible()) {
             ofPushMatrix();
             ofTranslate(obj->getPosition().x, obj->getPosition().y);
@@ -430,10 +472,13 @@ int ofApp::countActiveToggles() {
 
 void ofApp::drawDebugInfo() {
     ofSetColor(255, 255, 0);
-    ofDrawBitmapString("Controls:", 20, ofGetHeight() - 80);
-    ofDrawBitmapString("'r' - Reset all toggles", 20, ofGetHeight() - 60);
-    ofDrawBitmapString("'a' - Activate all toggles", 20, ofGetHeight() - 40);
-    ofDrawBitmapString("'t' - Toggle random", 20, ofGetHeight() - 20);
+    ofDrawBitmapString("Controls:", 20, ofGetHeight() - 100);
+    ofDrawBitmapString("'r' - Reset all toggles", 20, ofGetHeight() - 80);
+    ofDrawBitmapString("'a' - Activate all toggles", 20, ofGetHeight() - 60);
+    ofDrawBitmapString("'t' - Toggle random", 20, ofGetHeight() - 40);
+    ofDrawBitmapString("'e' - Mode édition", 20, ofGetHeight() - 20);
+    ofDrawBitmapString("'u' - Mode utilisation", 150, ofGetHeight() - 20);
+    ofDrawBitmapString("'Espace' - Basculer mode", 280, ofGetHeight() - 20);
     
     // Afficher les informations sur les objets qui ont le focus
     ofSetColor(200, 200, 255);

@@ -71,20 +71,9 @@ void PdSubpatch::update() {
 }
 
 void PdSubpatch::draw() {
-    // Dessiner le contour de la zone GOP du subpatch
-    ofPushStyle();
-    ofSetColor(100, 100, 255, 128); // Bleu semi-transparent
-    ofNoFill();
-    ofSetLineWidth(2);
-    ofDrawRectangle(0, 0, getSize().x, getSize().y);
-    
-    // Optionnel : ajouter un label
-    ofSetColor(80, 80, 200);
-    ofDrawBitmapString("GOP", 5, 15);
-    ofPopStyle();
-    
     // Méthode "flat" avec transformation correcte pour chaque enfant
     // Reproduire la logique d'ofApp::drawGuiObjects() pour les enfants
+    
     for (int i = 0; i < children.size(); i++) {
         auto& child = children[i];
         if (child && child->isVisible()) {
@@ -183,18 +172,14 @@ bool PdSubpatch::reload() {
 
 void PdSubpatch::addChild(std::unique_ptr<PdGuiObject> child) {
     if (child) {
-        // Les coordonnées des objets enfants doivent être relatives à l'origine de la zone GOP
+        // Les coordonnées des objets enfants restent telles quelles
+        // La position du subpatch devient le repère (0,0) pour ses enfants
         ofVec2f childPos = child->getPosition();
         
-        // Soustraire l'origine de la zone graphique GOP pour obtenir les coordonnées relatives
-        // Dans #X coords 0 -1 1 1 200 60 1 100 100, les derniers 100 100 sont l'origine
-        ofVec2f relativePos = childPos - ofVec2f(100, 100); // TODO: utiliser gopProps.originX/Y
+        ofLogNotice("PdSubpatch") << "Adding child at position (" << childPos.x << ", " << childPos.y << ")";
         
-        ofLogNotice("PdSubpatch") << "Child canvas pos (" << childPos.x << ", " << childPos.y 
-                                 << ") - GOP origin (100, 100) = relative (" 
-                                 << relativePos.x << ", " << relativePos.y << ")";
-        
-        child->setPosition(relativePos);
+        // PAS de transformation - garder les coordonnées canvas originales
+        // child->setPosition(transformedPos); ← SUPPRIMÉ
         
         // Configurer les callbacks pour l'objet enfant
         child->onSendToPd = this->onSendToPd;

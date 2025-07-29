@@ -64,6 +64,9 @@
 #include "PdGuiObject.h"
 #include "ofMain.h"
 
+// Déclaration forward
+class ofApp;
+
 class PdBang : public PdGuiObject {
 public:
     // === PALETTE DE COULEURS BANG ===
@@ -90,8 +93,11 @@ public:
     void draw() override;
     
     // === GESTION DES ÉVÉNEMENTS SOURIS ===
-    /// Gestion du clic - active le bang
+    /// Gestion du clic - active le bang en mode utilisation, démarre le drag en mode édition
     bool onMousePressed(ofMouseEventArgs& args) override;
+    
+    /// Gestion du drag - déplace l'objet en mode édition
+    bool onMouseDragged(ofMouseEventArgs& args) override;
     
     /// Gestion du relâchement - finalise l'interaction
     bool onMouseReleased(ofMouseEventArgs& args) override;
@@ -108,6 +114,10 @@ private:
     bool triggered;              ///< Bang actuellement activé
     float triggerTime;           ///< Temps depuis l'activation (pour le timeout)
     static const float TRIGGER_DURATION; ///< Durée d'activation = 300ms
+    
+    // === GESTION DU DÉPLACEMENT (MODE ÉDITION) ===
+    bool isDraggingObject;       ///< Objet en cours de déplacement en mode édition
+    ofVec2f dragOffset;          ///< Décalage entre position souris et coin de l'objet
     
     // === MÉTHODES DE DESSIN PRIVÉES ===
     /// Dessine l'état du bang (cercle rouge si activé)

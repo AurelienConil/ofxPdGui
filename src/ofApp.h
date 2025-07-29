@@ -71,6 +71,13 @@
  */
 class ofApp : public ofBaseApp {
 public:
+    // === SYSTÈME DE MODES ===
+    /// Énumération des modes de l'application
+    enum class AppMode {
+        EDIT_MODE,     ///< Mode édition : objets déplaçables, interactions figées
+        USE_MODE       ///< Mode utilisation : interactions normales, objets fixes
+    };
+
     // === MÉTHODES PRINCIPALES DU CYCLE DE VIE ===
     void setup() override;    ///< Initialisation : chargement du patch et configuration FBO
     void update() override;   ///< Mise à jour des objets GUI et logique de simulation
@@ -84,7 +91,26 @@ public:
     void mouseMoved(int x, int y) override;                ///< Mouvement : hover et feedback visuel
     
     // === GESTION DES ÉVÉNEMENTS CLAVIER ===
-    void keyPressed(int key) override; ///< Raccourcis : 'r'=reset, 'a'=tout activer, 't'=toggle aléatoire
+    void keyPressed(int key) override; ///< Raccourcis : 'r'=reset, 'a'=tout activer, 't'=toggle aléatoire, 'e'=mode édition, 'u'=mode utilisation
+    
+    // === GESTION DES MODES ===
+    /// Bascule entre mode édition et mode utilisation
+    void toggleMode();
+    
+    /// Active le mode édition (objets déplaçables)
+    void setEditMode();
+    
+    /// Active le mode utilisation (interactions normales)
+    void setUseMode();
+    
+    /// Récupère le mode actuel
+    AppMode getCurrentMode() const { return currentMode; }
+    
+    /// Vérifie si on est en mode édition
+    bool isEditMode() const { return currentMode == AppMode::EDIT_MODE; }
+    
+    /// Méthode statique pour que les objets GUI puissent connaître le mode actuel
+    static bool isGlobalEditMode() { return globalEditMode; }
     
 private:
     // === DONNÉES PRINCIPALES ===
@@ -101,6 +127,12 @@ private:
     // === SIMULATION ET TESTS ===
     /// Compteur temporel pour les fonctionnalités de test et simulation
     float simulationTime = 0.0f;
+    
+    /// Mode actuel de l'application (démarre en mode édition)
+    AppMode currentMode = AppMode::EDIT_MODE;
+    
+    /// Variable statique pour partager le mode avec tous les objets GUI
+    static bool globalEditMode;
     
     // === MÉTHODES DE CONFIGURATION ===
     void createToggles();     ///< [LEGACY] Création manuelle d'objets pour les tests

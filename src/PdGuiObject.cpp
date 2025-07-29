@@ -31,6 +31,8 @@ PdGuiObject::PdGuiObject(GuiType type, ofVec2f position, ofVec2f size,
     , isDragging(false)
     , lastMousePos(0, 0)
     , mousePressPos(0, 0)
+    , isDraggingObject(false)
+    , dragOffset(0, 0)
 {
     // Initialiser la région de mise à jour avec les dimensions complètes
     updateRegion = GuiUpdateRegion(getBounds());

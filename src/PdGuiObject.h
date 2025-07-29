@@ -48,6 +48,9 @@
 #include "ofMain.h"
 #include <functional>
 
+// Déclaration forward pour éviter les dépendances circulaires
+class ofApp;
+
 /// Types d'objets GUI supportés par le système
 /// Utilisé pour l'identification du type d'objet et le casting sécurisé
 enum class GuiType {
@@ -165,6 +168,9 @@ public:
     void setPosition(ofVec2f newPosition) { position = newPosition; markForUpdate(); }
     void setPosition(float x, float y) { setPosition(ofVec2f(x, y)); }
     
+    /// Déplace l'objet relativement à sa position actuelle (mode édition)
+    void moveBy(ofVec2f offset) { setPosition(position + offset); }
+    
     /// Taille de l'objet
     ofVec2f getSize() const { return size; }
     
@@ -225,6 +231,10 @@ protected:
     // === GESTION SOURIS ===
     ofVec2f lastMousePos;        ///< Dernière position de la souris
     ofVec2f mousePressPos;       ///< Position lors du clic initial
+    
+    // === GESTION DU DÉPLACEMENT (MODE ÉDITION) ===
+    bool isDraggingObject;       ///< Objet en cours de déplacement en mode édition
+    ofVec2f dragOffset;          ///< Décalage entre position souris et coin de l'objet
     
     // === MÉTHODES UTILITAIRES PROTÉGÉES ===
     /// Envoie une valeur numérique vers Pure Data via le callback
